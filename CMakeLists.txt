@@ -9,8 +9,7 @@ include(FetchContent)
 FetchContent_Declare(
     falcon_plugin_api
     GIT_REPOSITORY https://github.com/Falcon-MC/PluginAPI.git
-    # until Falcon-MC/PluginAPI#27 is merged: join and leave messages, command aliases, chat as a player
-    GIT_TAG feat/join-leave-messages-command-aliases
+    GIT_TAG main
     GIT_SHALLOW TRUE
 )
 set(FALCON_PLUGIN_API_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
