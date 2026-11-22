@@ -39,6 +39,7 @@ class Server{
     private ConsoleCommandSender $console;
     private BroadcastLoggerForwarder $logForwarder;
     private AsyncPool $asyncPool;
+    private \pocketmine\snooze\SleeperHandler $tickSleeper;
     private WorldManager $worldManager;
     private int $tickCounter = 0;
 
@@ -52,6 +53,7 @@ class Server{
     /** @internal the runtime makes the one server */
     public function __construct(
         private ServerLogger $logger,
+        private \pocketmine\thread\ThreadSafeClassLoader $loader,
         private string $dataPath,
         private string $pluginPath,
         string $pluginDataPath
@@ -62,7 +64,9 @@ class Server{
         $this->logForwarder = new BroadcastLoggerForwarder($this, $logger, $this->language);
         $this->commandMap = new SimpleCommandMap($this);
         $this->pluginManager = new PluginManager($this, $pluginDataPath);
-        $this->asyncPool = new AsyncPool();
+        $this->tickSleeper = new \pocketmine\snooze\SleeperHandler();
+        // two workers, PocketMine-MP's "auto" on a small machine; each task runs on a thread of its own
+        $this->asyncPool = new AsyncPool(2, 256, $loader, $logger, $this->tickSleeper);
         $this->worldManager = new WorldManager();
         $this->startTime = microtime(true);
     }
@@ -80,7 +84,10 @@ class Server{
     public function tick() : void{
         ++$this->tickCounter;
         $this->pluginManager->tickSchedulers($this->tickCounter);
+        // what other threads asked for: their notifications, then the async tasks done, then their log lines
+        $this->tickSleeper->processNotifications();
         $this->asyncPool->collectTasks();
+        $this->logger->flush();
         if($this->tickCounter % 1200 === 0){
             \pmmpcompat\Entities::forgetClosed();
         }
@@ -106,6 +113,16 @@ class Server{
 
     public function getTickUsageAverage() : float{
         return $this->getTickUsage();
+    }
+
+    /** the loader of the runtime's and plugins' classes, which threads register too */
+    public function getLoader() : \pocketmine\thread\ThreadSafeClassLoader{
+        return $this->loader;
+    }
+
+    /** where threads wake the server: a notifier's handler runs on the next tick */
+    public function getTickSleeper() : \pocketmine\snooze\SleeperHandler{
+        return $this->tickSleeper;
     }
 
     public function getAsyncPool() : AsyncPool{
@@ -137,7 +154,7 @@ class Server{
         return $this->pluginPath;
     }
 
-    public function getLogger() : \AttachableLogger{
+    public function getLogger() : \pocketmine\thread\log\AttachableThreadSafeLogger{
         return $this->logger;
     }
 

@@ -25,11 +25,13 @@ jobs:
 
       - name: Install build tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config zlib1g-dev libcurl4-openssl-dev ninja-build
+        run: >-
+          sudo apt-get update && sudo apt-get install -y build-essential pkg-config zlib1g-dev libcurl4-openssl-dev
+          ninja-build autoconf automake libtool libsqlite3-dev libgmp-dev libssl-dev
 
       - name: Install build tools
         if: runner.os == 'macOS'
-        run: brew install ninja
+        run: brew install ninja autoconf automake libtool gmp openssl@3
 
       - name: Cache PHP
         id: php

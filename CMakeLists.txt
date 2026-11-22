@@ -34,6 +34,7 @@ falcon_add_plugin(PmmpCompat
     src/php_world.c
     src/php_living.c
     src/php_server.c
+    src/php_watchdog.c
     third_party/ext-encoding/encoding.cpp
     third_party/ext-encoding/classes/ByteBufferReader.cpp
     third_party/ext-encoding/classes/ByteBufferWriter.cpp
@@ -53,10 +54,21 @@ target_link_libraries(PmmpCompat PRIVATE "${PMMP_LIBPHP}")
 if (WIN32)
     target_link_libraries(PmmpCompat PRIVATE "${PMMP_LIBPHP_TS}")
     target_compile_definitions(PmmpCompat PRIVATE ZEND_WIN32 PHP_WIN32 ZTS=1 ZEND_DEBUG=0 WIN32 _WINDOWS)
-elseif (APPLE)
-    target_link_libraries(PmmpCompat PRIVATE resolv network m pthread z curl)
 elseif (UNIX)
-    target_link_libraries(PmmpCompat PRIVATE resolv m pthread z dl curl)
+    # the libraries the build links against, openssl's and gmp's archives among them on macOS
+    execute_process(COMMAND "${PMMP_PHP_PREFIX}/bin/php-config" --libs
+                    OUTPUT_VARIABLE PMMP_PHP_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+    execute_process(COMMAND "${PMMP_PHP_PREFIX}/bin/php-config" --ldflags
+                    OUTPUT_VARIABLE PMMP_PHP_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+    if (EXISTS "${PMMP_PHP_PREFIX}/lib/pmmp-extra-libs.txt")
+        file(READ "${PMMP_PHP_PREFIX}/lib/pmmp-extra-libs.txt" PMMP_PHP_EXTRA_LIBS)
+        string(STRIP "${PMMP_PHP_EXTRA_LIBS}" PMMP_PHP_EXTRA_LIBS)
+        string(PREPEND PMMP_PHP_LIBS "${PMMP_PHP_EXTRA_LIBS} ")
+    endif ()
+    separate_arguments(PMMP_PHP_LIBS UNIX_COMMAND "${PMMP_PHP_LIBS}")
+    separate_arguments(PMMP_PHP_LDFLAGS UNIX_COMMAND "${PMMP_PHP_LDFLAGS}")
+    target_link_options(PmmpCompat PRIVATE ${PMMP_PHP_LDFLAGS})
+    target_link_libraries(PmmpCompat PRIVATE ${PMMP_PHP_LIBS})
 endif ()
 
 # the plugin folder a server takes: cmake --install build --prefix dist gives dist/pmmp-compat
@@ -65,11 +77,15 @@ install(FILES plugin.json DESTINATION pmmp-compat)
 install(DIRECTORY php DESTINATION pmmp-compat)
 if (WIN32)
     install(FILES "${PMMP_PHP_PREFIX}/php8ts.dll" DESTINATION pmmp-compat)
-    # the official build ships mbstring as a dll the plugin loads at startup
-    install(FILES "${PMMP_PHP_PREFIX}/ext/php_mbstring.dll" "${PMMP_PHP_PREFIX}/ext/php_curl.dll"
+    # PocketMine-MP's build keeps these outside php8ts.dll: the plugin loads them at startup
+    install(FILES "${PMMP_PHP_PREFIX}/ext/php_pmmpthread.dll" "${PMMP_PHP_PREFIX}/ext/php_openssl.dll"
+            "${PMMP_PHP_PREFIX}/ext/php_igbinary.dll" "${PMMP_PHP_PREFIX}/ext/php_mysqli.dll"
+            "${PMMP_PHP_PREFIX}/ext/php_sqlite3.dll"
             DESTINATION pmmp-compat/ext)
-    # what php_curl.dll loads; the plugin points Windows at its own folder for them
+    # what php8ts.dll and those load; the plugin points Windows at its own folder for them
     install(FILES "${PMMP_PHP_PREFIX}/libssh2.dll" "${PMMP_PHP_PREFIX}/nghttp2.dll"
             "${PMMP_PHP_PREFIX}/libcrypto-3-x64.dll" "${PMMP_PHP_PREFIX}/libssl-3-x64.dll"
+            "${PMMP_PHP_PREFIX}/libsqlite3.dll" "${PMMP_PHP_PREFIX}/pthreadvc3.dll" "${PMMP_PHP_PREFIX}/yaml.dll"
+            "${PMMP_PHP_PREFIX}/deflate.dll"
             DESTINATION pmmp-compat OPTIONAL)
 endif ()

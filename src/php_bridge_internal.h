@@ -26,6 +26,12 @@ bool call_bridge(const char *method, uint32_t count, zval *arguments, zval *resu
 void item_to_array(FalconItem *item, zval *out);
 FalconItem *item_from_array(HashTable *data);
 
+// the watchdog: started with PHP; the bridge tells it when PHP holds the server's thread
+void pmmp_watchdog_start(void);
+void pmmp_watchdog_stop(void);
+void pmmp_watchdog_enter(void);
+void pmmp_watchdog_leave(void);
+
 // the world, block, item and entity functions, registered with the falcon module
 extern const zend_function_entry falcon_world_functions[];
 

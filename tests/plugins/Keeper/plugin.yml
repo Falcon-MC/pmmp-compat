@@ -1,0 +1,5 @@
+name: Keeper
+version: 1.0.0
+main: keeper\Main
+api: 5.0.0
+extensions: [sqlite3, pdo_sqlite, mysqli, pmmpthread]

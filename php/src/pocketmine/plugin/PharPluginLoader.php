@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace pocketmine\plugin;
 
-use pmmpcompat\ClassLoader;
+use pocketmine\thread\ThreadSafeClassLoader;
 
 /** Plugins packed as .phar files, as Poggit builds them */
 class PharPluginLoader implements PluginLoader{
     private const PROTOCOL = 'phar://';
 
     public function __construct(
-        private ClassLoader $loader
+        private ThreadSafeClassLoader $loader
     ){
     }
 

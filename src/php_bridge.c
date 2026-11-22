@@ -114,11 +114,13 @@ bool call_bridge(const char *method, uint32_t count, zval *arguments, zval *resu
     struct guard_state state;
     guard_save(&state);
     bool completed = true;
+    pmmp_watchdog_enter();
     zend_try {
         completed = call_user_function(NULL, NULL, &function, result, count, arguments) == SUCCESS;
     } zend_catch {
         completed = false;
     } zend_end_try();
+    pmmp_watchdog_leave();
     if (!completed)
         guard_restore(&state);
     // the Bridge catches what PHP throws; what is left is exit(), which must not end the server's PHP
@@ -542,11 +544,12 @@ static zend_module_entry falcon_module = {
 
 // the embed SAPI resets its function list in php_embed_init, its startup hook is ours to set
 #ifdef PHP_WIN32
-// the extensions the official Windows build keeps outside php8ts.dll, beside the plugin in ext/
+// the extensions PocketMine-MP's Windows build keeps outside php8ts.dll, beside the plugin in ext/
 static char *windows_ini = NULL;
 
 static void load_windows_extensions(sapi_module_struct *module) {
-    static const char extensions[] = "extension=mbstring\nextension=curl\n";
+    static const char extensions[] = "extension=pmmpthread\nextension=openssl\nextension=igbinary\n"
+                                     "extension=mysqli\nextension=sqlite3\n";
     const char *base = module->ini_entries != NULL ? module->ini_entries : "";
     const char *folder = plugin_folder != NULL ? plugin_folder : ".";
     const size_t length = strlen(base) + strlen(folder) + sizeof("extension_dir=\"/ext\"\n") + sizeof(extensions);
@@ -617,6 +620,8 @@ int pmmp_php_start(pmmp_log_sink sink, const char *folder) {
     plugin_folder = malloc(length + 1);
     if (plugin_folder != NULL)
         memcpy(plugin_folder, folder, length + 1);
+    // PHP answers to "cli" as under PocketMine-MP: plugins check PHP_SAPI, and pmmpthread starts only there
+    php_embed_module.name = (char *) "cli";
     php_embed_module.startup = startup_with_falcon;
     php_embed_module.ub_write = write_output;
     php_embed_module.log_message = write_log;
@@ -626,6 +631,7 @@ int pmmp_php_start(pmmp_log_sink sink, const char *folder) {
     if (php_embed_init(0, NULL) != SUCCESS)
         return 1;
     php_running = true;
+    pmmp_watchdog_start();
     return 0;
 }
 
@@ -670,6 +676,7 @@ size_t pmmp_php_memory(int peak) {
 }
 
 void pmmp_php_stop(void) {
+    pmmp_watchdog_stop();
     php_running = false;
     php_embed_shutdown();
     log_sink = NULL;

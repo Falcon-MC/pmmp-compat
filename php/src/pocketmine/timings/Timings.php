@@ -15,11 +15,23 @@ abstract class Timings{
     public static TimingsHandler $permissibleCalculationDiff;
     public static TimingsHandler $permissibleCalculationCallback;
     public static TimingsHandler $playerChunkSend;
+    public static TimingsHandler $asyncTaskWorkers;
+    public static TimingsHandler $garbageCollector;
+    public static TimingsHandler $broadcastPackets;
+
+    private static bool $initialized = false;
 
     /** @var TimingsHandler[] by event class */
     private static array $events = [];
 
     public static function init() : void{
+        if(self::$initialized){
+            return;
+        }
+        self::$initialized = true;
+        self::$asyncTaskWorkers = new TimingsHandler("Async Task Workers");
+        self::$garbageCollector = new TimingsHandler("Garbage Collector");
+        self::$broadcastPackets = new TimingsHandler("Broadcast Packets");
         self::$permissibleCalculation = new TimingsHandler("Permissible Calculation");
         self::$permissibleCalculationDiff = new TimingsHandler("Permissible Calculation - Diff", self::$permissibleCalculation);
         self::$permissibleCalculationCallback = new TimingsHandler("Permissible Calculation - Callbacks", self::$permissibleCalculation);
@@ -37,6 +49,14 @@ abstract class Timings{
     public static function getScheduledTaskTimings(\pocketmine\scheduler\TaskHandler $task, int $period) : TimingsHandler{
         return new TimingsHandler("Task: " . $task->getTaskName() . ($period > 0 ? " (interval:$period)" : " (Single)"),
             group: $task->getOwnerName());
+    }
+
+    public static function getAsyncTaskCompletionTimings(\pocketmine\scheduler\AsyncTask $task) : TimingsHandler{
+        return new TimingsHandler("AsyncTask: " . $task::class . " - Completion", group: self::GROUP_BREAKDOWN);
+    }
+
+    public static function getAsyncTaskProgressUpdateTimings(\pocketmine\scheduler\AsyncTask $task) : TimingsHandler{
+        return new TimingsHandler("AsyncTask: " . $task::class . " - Progress Updates", group: self::GROUP_BREAKDOWN);
     }
 
     public static function getAsyncTaskRunTimings(\pocketmine\scheduler\AsyncTask $task) : TimingsHandler{

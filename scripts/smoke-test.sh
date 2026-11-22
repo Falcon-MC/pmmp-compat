@@ -80,7 +80,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "13 PocketMine-MP plugins loaded, 9 could not be"
+expect "14 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -178,6 +178,15 @@ expect "fixture: Wanderer skin known"
 expect "fixture: Wanderer played a sound and a particle"
 expect "fixture: Wanderer death drops"
 expect "fixture: Wanderer kept Blade after death"
+
+# databases, threads, the server's sleeper and promises
+expect "fixture: Keeper sqlite3 reads 100"
+expect "fixture: Keeper pdo counts 1, drivers mysql,sqlite"
+expect "fixture: Keeper mysqli ready, bcmath 0.3, igbinary 1, sockets ready"
+expect "fixture: Keeper promise resolved with gold"
+expect "fixture: Keeper thread woke the server"
+expect "fixture: Keeper thread squared the sum: 100"
+expect "fixture: Keeper worker wrote sqlite, total 142"
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

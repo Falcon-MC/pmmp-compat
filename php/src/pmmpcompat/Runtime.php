@@ -12,6 +12,8 @@ use pocketmine\permission\DefaultPermissions;
 use pocketmine\plugin\PluginManager;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
+use pocketmine\thread\ThreadSafeClassLoader;
+use pocketmine\thread\ThreadManager;
 use pocketmine\utils\Filesystem;
 
 /** Starts and stops the PocketMine-MP plugins inside Falcon. */
@@ -33,7 +35,8 @@ final class Runtime{
         if(self::$plugins !== null){
             throw new \LogicException('the runtime is already started');
         }
-        $classes = new ClassLoader();
+        // thread-safe, as PocketMine-MP's: threads plugins start register the same loader
+        $classes = new ThreadSafeClassLoader();
         $classes->addPath('pocketmine', $runtimeFolder . '/src/pocketmine');
         $classes->addPath('pmmpcompat', $runtimeFolder . '/src/pmmpcompat');
         $classes->addPath('Symfony\\Component\\Yaml', $runtimeFolder . '/vendor/symfony/yaml');
@@ -48,14 +51,14 @@ final class Runtime{
         $classes->addPath('Brick\\Math', $runtimeFolder . '/vendor/brick/math');
         // the log library's classes are global: \Logger, \PrefixedLogger
         $classes->addPath('', $runtimeFolder . '/src/log');
+        $classes->addPath('pocketmine\\snooze', $runtimeFolder . '/vendor/pocketmine/snooze');
         $classes->register();
-        require_once $runtimeFolder . '/vendor/symfony/deprecation-contracts/function.php';
-        require_once $runtimeFolder . '/src/functions/yaml.php';
-        require_once $runtimeFolder . '/vendor/ramsey/uuid/functions.php';
+        require_once $runtimeFolder . '/vendor/autoload.php';
         self::definePaths($runtimeFolder, $pluginFolder);
         // as PocketMine-MP does: warnings and notices are thrown, plugins catch them as \ErrorException
         ErrorToExceptionHandler::set();
         self::$logger = new ServerLogger();
+        \GlobalLogger::set(self::$logger);
 
         $pluginsPath = $pluginFolder . '/plugins';
         $dataPath = $pluginFolder . '/plugin_data';
@@ -67,7 +70,7 @@ final class Runtime{
 
         Timings::init();
         DefaultPermissions::registerCorePermissions();
-        $server = new Server(self::$logger, \pocketmine\DATA, \pocketmine\PLUGIN_PATH, $dataPath);
+        $server = new Server(self::$logger, $classes, \pocketmine\DATA, \pocketmine\PLUGIN_PATH, $dataPath);
         $manager = $server->getPluginManager();
         $manager->registerInterface(new PharPluginLoader($classes));
         $manager->registerInterface(new FolderPluginLoader($classes));
@@ -89,7 +92,6 @@ final class Runtime{
         $paths = [
             'PATH' => $runtimeFolder . '/',
             'RESOURCE_PATH' => $runtimeFolder . '/resources/',
-            'COMPOSER_AUTOLOADER_PATH' => $runtimeFolder . '/vendor/autoload.php',
             'DATA' => str_replace('\\', '/', (string) getcwd()) . '/',
             'PLUGIN_PATH' => $pluginFolder . '/plugins/',
             'LOCALE_DATA_PATH' => $runtimeFolder . '/resources/locale/',
@@ -105,7 +107,15 @@ final class Runtime{
     public static function stop() : void{
         self::$plugins?->disablePlugins();
         if(self::$plugins !== null){
-            Server::getInstance()->getAsyncPool()->shutdown();
+            $server = Server::getInstance();
+            try{
+                $server->getAsyncPool()->shutdown();
+                // the threads plugins left running stop with the server, as PocketMine-MP's do
+                ThreadManager::getInstance()->stopAll();
+            }catch(\Throwable $e){
+                Log::critical('Could not stop the threads: ' . $e->getMessage());
+            }
+            self::$logger?->flush();
         }
         self::$plugins = null;
     }

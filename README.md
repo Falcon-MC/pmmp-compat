@@ -38,7 +38,11 @@ usual, and each class forwards to Falcon.
   - `onCommand`, permissions and aliases.
 - **Scheduler**:
   - delayed and repeating tasks on the server thread;
-  - async tasks on a worker pool.
+  - async tasks on a pool of worker threads.
+- **Threads and databases**:
+  - `pocketmine\thread\Thread` and `Worker` on pmmpthread, as PocketMine-MP runs them, with the server's sleeper;
+  - SQLite3, PDO and mysqli, so libasynql and the plugins built on it keep their data;
+  - promises.
 - **Players and worlds**:
   - messages, titles, forms, inventories and teleports;
   - blocks, entities and worlds, mapped to their Falcon counterparts.
@@ -76,11 +80,15 @@ existing `config.yml` files can be copied over.
 
 ## Building
 
-Requires CMake 3.16+, a C++17 compiler and the PHP 8 embed library (`libphp`, built with `--enable-embed`).
+Requires CMake 3.16+, a C++20 compiler and the thread-safe PHP 8 embed library the scripts set up:
+`scripts/build-php.sh` on Linux and macOS (it needs autoconf and the sqlite3, gmp and openssl development files),
+`scripts/fetch-php-windows.ps1` on Windows.
 
 ```
+scripts/build-php.sh
 cmake -B build -G Ninja
 cmake --build build
+cmake --install build --prefix dist
 ```
 
 ## Related repositories

@@ -1,134 +1,386 @@
 <?php
 
+/*
+ *
+ *  ____            _        _   __  __ _                  __  __ ____
+ * |  _ \ ___   ___| | _____| |_|  \/  (_)_ __   ___      |  \/  |  _ \
+ * | |_) / _ \ / __| |/ / _ \ __| |\/| | | '_ \ / _ \_____| |\/| | |_) |
+ * |  __/ (_) | (__|   <  __/ |_| |  | | | | | |  __/_____| |  | |  __/
+ * |_|   \___/ \___|_|\_\___|\__|_|  |_|_|_| |_|\___|     |_|  |_|_|
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * @author PocketMine Team
+ * @link http://www.pocketmine.net/
+ *
+ *
+ */
+
 declare(strict_types=1);
 
 namespace pocketmine\scheduler;
 
-use pmmpcompat\Log;
+use pmmp\thread\Thread as NativeThread;
+use pocketmine\snooze\SleeperHandler;
+use pocketmine\thread\log\ThreadSafeLogger;
+use pocketmine\thread\ThreadCrashException;
+use pocketmine\thread\ThreadSafeClassLoader;
+use pocketmine\timings\Timings;
+use pocketmine\utils\AssumptionFailedError;
+use pocketmine\utils\Utils;
+use function array_keys;
+use function array_map;
+use function assert;
+use function count;
+use function get_class;
+use function spl_object_id;
+use function time;
+use const PHP_INT_MAX;
 
 /**
- * Where plugins submit AsyncTasks: Server::getAsyncPool().
- *
- * The tasks run on the server thread, one tick after they are submitted (see AsyncTask). The worker counts and hooks
- * are kept, so plugins that size or watch the pool keep working, but no worker thread starts.
+ * Manages general-purpose worker threads used for processing asynchronous tasks, and the tasks submitted to those
+ * workers.
  */
 class AsyncPool{
-    /** @var AsyncTask[] in submission order */
-    private array $queue = [];
-    /** @var \Closure[] */
-    private array $workerStartHooks = [];
+	private const WORKER_START_OPTIONS = NativeThread::INHERIT_INI | NativeThread::INHERIT_COMMENTS;
 
-    public function __construct(
-        private int $size = 2
-    ){
-    }
+	/**
+	 * @var AsyncPoolWorkerEntry[]
+	 * @phpstan-var array<int, AsyncPoolWorkerEntry>
+	 */
+	private array $workers = [];
 
-    public function getSize() : int{
-        return $this->size;
-    }
+	/**
+	 * @var \Closure[]
+	 * @phpstan-var (\Closure(int $workerId) : void)[]
+	 */
+	private array $workerStartHooks = [];
 
-    public function increaseSize(int $newSize) : void{
-        if($newSize > $this->size){
-            $this->size = $newSize;
-        }
-    }
+	public function __construct(
+		protected int $size,
+		private int $workerMemoryLimit,
+		private ThreadSafeClassLoader $classLoader,
+		private ThreadSafeLogger $logger,
+		private SleeperHandler $eventLoop
+	){}
 
-    /**
-     * @phpstan-param \Closure(int $workerId) : void $hook
-     */
-    public function addWorkerStartHook(\Closure $hook) : void{
-        $this->workerStartHooks[spl_object_id($hook)] = $hook;
-    }
+	/**
+	 * Returns the maximum size of the pool. Note that there may be less active workers than this number.
+	 */
+	public function getSize() : int{
+		return $this->size;
+	}
 
-    public function removeWorkerStartHook(\Closure $hook) : void{
-        unset($this->workerStartHooks[spl_object_id($hook)]);
-    }
+	/**
+	 * Increases the maximum size of the pool to the specified amount. This does not immediately start new workers.
+	 */
+	public function increaseSize(int $newSize) : void{
+		if($newSize > $this->size){
+			$this->size = $newSize;
+		}
+	}
 
-    /** @return int[] none: no worker thread runs */
-    public function getRunningWorkers() : array{
-        return [];
-    }
+	/**
+	 * Registers a Closure callback to be fired whenever a new worker is started by the pool.
+	 * The signature should be `function(int $worker) : void`
+	 *
+	 * This function will call the hook for every already-running worker.
+	 *
+	 * @phpstan-param \Closure(int $workerId) : void $hook
+	 */
+	public function addWorkerStartHook(\Closure $hook) : void{
+		Utils::validateCallableSignature(function(int $worker) : void{}, $hook);
+		$this->workerStartHooks[spl_object_id($hook)] = $hook;
+		foreach($this->workers as $i => $worker){
+			$hook($i);
+		}
+	}
 
-    public function submitTaskToWorker(AsyncTask $task, int $worker) : void{
-        if($worker < 0 || $worker >= $this->size){
-            throw new \InvalidArgumentException("Invalid worker $worker");
-        }
-        $this->submitTask($task);
-    }
+	/**
+	 * Removes a previously-registered callback listening for workers being started.
+	 *
+	 * @phpstan-param \Closure(int $workerId) : void $hook
+	 */
+	public function removeWorkerStartHook(\Closure $hook) : void{
+		unset($this->workerStartHooks[spl_object_id($hook)]);
+	}
 
-    public function selectWorker() : int{
-        return 0;
-    }
+	/**
+	 * Returns an array of IDs of currently running workers.
+	 *
+	 * @return int[]
+	 */
+	public function getRunningWorkers() : array{
+		return array_keys($this->workers);
+	}
 
-    public function submitTask(AsyncTask $task) : int{
-        if($task->isSubmitted()){
-            throw new \InvalidArgumentException("Cannot submit the same AsyncTask instance more than once");
-        }
-        $task->setSubmitted();
-        $this->queue[] = $task;
-        return 0;
-    }
+	/**
+	 * Fetches the worker with the specified ID, starting it if it does not exist, and firing any registered worker
+	 * start hooks.
+	 */
+	private function getWorker(int $workerId) : AsyncPoolWorkerEntry{
+		if(!isset($this->workers[$workerId])){
+			$sleeperEntry = $this->eventLoop->addNotifier(function() use ($workerId) : void{
+				$this->collectTasksFromWorker($workerId);
+			});
+			$this->workers[$workerId] = new AsyncPoolWorkerEntry(new AsyncWorker($this->logger, $workerId, $this->workerMemoryLimit, $sleeperEntry), $sleeperEntry->getNotifierId());
+			$this->workers[$workerId]->worker->setClassLoaders([$this->classLoader]);
+			$this->workers[$workerId]->worker->start(self::WORKER_START_OPTIONS);
 
-    /**
-     * Runs what was submitted before this tick: onRun(), the progress updates, then onCompletion() or onError().
-     *
-     * @return bool whether tasks are still waiting
-     */
-    public function collectTasks() : bool{
-        $tasks = $this->queue;
-        $this->queue = [];
-        foreach($tasks as $task){
-            self::runTask($task);
-        }
-        return count($this->queue) > 0;
-    }
+			foreach($this->workerStartHooks as $hook){
+				$hook($workerId);
+			}
+		}elseif($this->workers[$workerId]->worker->isTerminated()){
+			$this->recoverCrashedWorker($workerId, null);
+			return $this->getWorker($workerId);
+		}
 
-    public function collectTasksFromWorker(int $worker) : bool{
-        return $this->collectTasks();
-    }
+		return $this->workers[$workerId];
+	}
 
-    private static function runTask(AsyncTask $task) : void{
-        $name = $task::class;
-        try{
-            if(!falcon_guard(static fn() => $task->run())){
-                Log::critical("AsyncTask $name stopped on a fatal error or exit(), see above");
-                $task->markCrashed();
-            }
-        }catch(\Throwable $e){
-            Log::critical("AsyncTask $name failed: " . $e->getMessage());
-            Log::exception($e);
-            $task->markCrashed();
-        }
+	/**
+	 * Submits an AsyncTask to an arbitrary worker.
+	 */
+	public function submitTaskToWorker(AsyncTask $task, int $worker) : void{
+		if($worker < 0 || $worker >= $this->size){
+			throw new \InvalidArgumentException("Invalid worker $worker");
+		}
+		if($task->isSubmitted()){
+			throw new \InvalidArgumentException("Cannot submit the same AsyncTask instance more than once");
+		}
 
-        try{
-            $completed = falcon_guard(static function() use ($task) : void{
-                $task->checkProgressUpdates();
-                if($task->isCrashed()){
-                    $task->onError();
-                }else{
-                    $task->onCompletion();
-                }
-            });
-            if(!$completed){
-                Log::critical("The completion of AsyncTask $name stopped on a fatal error or exit(), see above");
-            }
-        }catch(\Throwable $e){
-            Log::critical("The completion of AsyncTask $name failed: " . $e->getMessage());
-            Log::exception($e);
-        }
-    }
+		$task->setSubmitted();
 
-    /** @return int[] by worker */
-    public function getTaskQueueSizes() : array{
-        return [count($this->queue)];
-    }
+		$this->getWorker($worker)->submit($task);
+	}
 
-    public function shutdownUnusedWorkers() : int{
-        return 0;
-    }
+	/**
+	 * Selects a worker ID to run a task.
+	 *
+	 * - if an idle worker is found, it will be selected
+	 * - else, if the worker pool is not full, a new worker will be selected
+	 * - else, the worker with the smallest backlog is chosen.
+	 */
+	public function selectWorker() : int{
+		$worker = null;
+		$minUsage = PHP_INT_MAX;
+		foreach($this->workers as $i => $entry){
+			if(($usage = $entry->tasks->count()) < $minUsage){
+				$worker = $i;
+				$minUsage = $usage;
+				if($usage === 0){
+					break;
+				}
+			}
+		}
+		if($worker === null || ($minUsage > 0 && count($this->workers) < $this->size)){
+			//select a worker to start on the fly
+			for($i = 0; $i < $this->size; ++$i){
+				if(!isset($this->workers[$i])){
+					$worker = $i;
+					break;
+				}
+			}
+		}
 
-    /** what is still waiting runs now, as the workers would finish it before PocketMine-MP stops */
-    public function shutdown() : void{
-        $this->collectTasks();
-    }
+		assert($worker !== null);
+		return $worker;
+	}
+
+	/**
+	 * Submits an AsyncTask to the worker with the least load. If all workers are busy and the pool is not full, a new
+	 * worker may be started.
+	 */
+	public function submitTask(AsyncTask $task) : int{
+		if($task->isSubmitted()){
+			throw new \InvalidArgumentException("Cannot submit the same AsyncTask instance more than once");
+		}
+
+		$worker = $this->selectWorker();
+		$this->submitTaskToWorker($task, $worker);
+		return $worker;
+	}
+
+	private function recoverCrashedWorker(int $workerId, ?AsyncTask $crashedTask) : void{
+		$entry = $this->workers[$workerId];
+		if($crashedTask === null){
+			foreach($entry->tasks as $task){
+				if($task->isTerminated()){
+					$crashedTask = $task;
+					break;
+				}
+			}
+		}
+		try{
+			$this->checkCrashedWorker($workerId, $crashedTask);
+		}catch(ThreadCrashException $e){
+			$this->logger->critical($e->getMessage() . ": " . $e->getCrashInfo()->makePrettyMessage());
+			foreach($e->getCrashInfo()->getTrace() as $frame){
+				$this->logger->critical("  " . $frame->getPrintableFrame());
+			}
+		}catch(\RuntimeException $e){
+			$this->logger->critical($e->getMessage());
+		}
+		try{
+			$crashedTask?->onError();
+		}catch(\Throwable $e){
+			$this->logger->logException($e);
+		}
+
+		$waiting = [];
+		while(!$entry->tasks->isEmpty()){
+			$task = $entry->tasks->dequeue();
+			if($task !== $crashedTask){
+				$waiting[] = $task;
+			}
+		}
+		if($entry->worker->isStarted() && !$entry->worker->isJoined()){
+			$entry->worker->join();
+		}
+		$this->eventLoop->removeNotifier($entry->sleeperNotifierId);
+		unset($this->workers[$workerId]);
+		foreach($waiting as $task){
+			if(!$task->isFinished()){
+				$this->getWorker($this->selectWorker())->submit($task);
+			}
+		}
+	}
+
+	private function checkCrashedWorker(int $workerId, ?AsyncTask $crashedTask) : void{
+		$entry = $this->workers[$workerId];
+		if($entry->worker->isTerminated()){
+			if($crashedTask === null){
+				foreach($entry->tasks as $task){
+					if($task->isTerminated()){
+						$crashedTask = $task;
+						break;
+					}elseif(!$task->isFinished()){
+						break;
+					}
+				}
+			}
+			$info = $entry->worker->getCrashInfo();
+			if($info !== null){
+				if($crashedTask !== null){
+					$message = "Worker $workerId crashed while running task " . get_class($crashedTask) . "#" . spl_object_id($crashedTask);
+				}else{
+					$message = "Worker $workerId crashed while doing unknown work";
+				}
+				throw new ThreadCrashException($message, $info);
+			}else{
+				throw new \RuntimeException("Worker $workerId crashed for unknown reason");
+			}
+		}
+	}
+
+	/**
+	 * Collects finished and/or crashed tasks from the workers, firing their on-completion hooks where appropriate.
+	 *
+	 * @throws \ReflectionException
+	 * @return bool whether there are tasks left to be collected
+	 */
+	public function collectTasks() : bool{
+		foreach($this->workers as $workerId => $entry){
+			$this->collectTasksFromWorker($workerId);
+		}
+
+		//we check this in a second loop, because task collection could have caused new tasks to be added to the queues
+		foreach($this->workers as $entry){
+			if(!$entry->tasks->isEmpty()){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public function collectTasksFromWorker(int $worker) : bool{
+		if(!isset($this->workers[$worker])){
+			throw new \InvalidArgumentException("No such worker $worker");
+		}
+		$queue = $this->workers[$worker]->tasks;
+		$more = false;
+		while(!$queue->isEmpty()){
+			/** @var AsyncTask $task */
+			$task = $queue->bottom();
+			if($task->isFinished()){ //make sure the task actually executed before trying to collect
+				$queue->dequeue();
+
+				if($task->isTerminated()){
+					//falcon keeps running when a plugin's task crashes its worker: the crash is logged, the task
+					//told, and what was waiting on that worker goes to a new one
+					$this->recoverCrashedWorker($worker, $task);
+					return false;
+				}else{
+					/*
+					 * It's possible for a task to submit a progress update and then finish before the progress
+					 * update is detected by the parent thread, so here we consume any missed updates.
+					 *
+					 * When this happens, it's possible for a progress update to arrive between the previous
+					 * checkProgressUpdates() call and the next isGarbage() call, causing progress updates to be
+					 * lost. Thus, it's necessary to do one last check here to make sure all progress updates have
+					 * been consumed before completing.
+					 */
+					$this->checkTaskProgressUpdates($task);
+					Timings::getAsyncTaskCompletionTimings($task)->time(function() use ($task) : void{
+						$task->onCompletion();
+					});
+				}
+			}else{
+				$this->checkTaskProgressUpdates($task);
+				$more = true;
+				break; //current task is still running, skip to next worker
+			}
+		}
+		$this->workers[$worker]->worker->collect();
+		return $more;
+	}
+
+	/**
+	 * Returns an array of worker ID => task queue size
+	 *
+	 * @return int[]
+	 * @phpstan-return array<int, int>
+	 */
+	public function getTaskQueueSizes() : array{
+		return array_map(function(AsyncPoolWorkerEntry $entry) : int{ return $entry->tasks->count(); }, $this->workers);
+	}
+
+	public function shutdownUnusedWorkers() : int{
+		$ret = 0;
+		$time = time();
+		foreach($this->workers as $i => $entry){
+			if($entry->lastUsed + 300 < $time && $entry->tasks->isEmpty()){
+				$entry->worker->quit();
+				$this->eventLoop->removeNotifier($entry->sleeperNotifierId);
+				unset($this->workers[$i]);
+				$ret++;
+			}
+		}
+
+		return $ret;
+	}
+
+	/**
+	 * Cancels all pending tasks and shuts down all the workers in the pool.
+	 */
+	public function shutdown() : void{
+		while($this->collectTasks()){
+			//NOOP
+		}
+
+		foreach($this->workers as $worker){
+			$worker->worker->quit();
+			$this->eventLoop->removeNotifier($worker->sleeperNotifierId);
+		}
+		$this->workers = [];
+	}
+
+	private function checkTaskProgressUpdates(AsyncTask $task) : void{
+		Timings::getAsyncTaskProgressUpdateTimings($task)->time(function() use ($task) : void{
+			$task->checkProgressUpdates();
+		});
+	}
 }

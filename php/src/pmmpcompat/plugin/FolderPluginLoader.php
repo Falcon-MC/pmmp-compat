@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace pmmpcompat\plugin;
 
-use pmmpcompat\ClassLoader;
+use pocketmine\thread\ThreadSafeClassLoader;
 use pocketmine\plugin\PluginDescription;
 use pocketmine\plugin\PluginException;
 use pocketmine\plugin\PluginLoader;
@@ -12,7 +12,7 @@ use pocketmine\plugin\PluginLoader;
 /** Plugins left as source, a folder with plugin.yml and src/, as PocketMine-MP's DevTools runs them */
 final class FolderPluginLoader implements PluginLoader{
     public function __construct(
-        private ClassLoader $loader
+        private ThreadSafeClassLoader $loader
     ){
     }
 

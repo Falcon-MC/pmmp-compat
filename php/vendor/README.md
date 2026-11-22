@@ -14,6 +14,7 @@ Copied as released, without their tests and command line tools. Each keeps its l
 | [ramsey/uuid](https://github.com/ramsey/uuid) | 4.9.3 | `55857b37190a6f6cb1141aa7e0533170ef01871f40def01c1930adc20866af14` | MIT |
 | [ramsey/collection](https://github.com/ramsey/collection) | 2.1.1 | `54b69e8af6b249f27bc8b787cca58b41e8aba78272af8d41518bd1723181e931` | MIT |
 | [brick/math](https://github.com/brick/math) | 0.13.1 | `ad05e9fc391722f263acca6df51fdcdb66ab948f22cfd530972d782b8853d884` | MIT |
+| [pocketmine/snooze](https://github.com/pmmp/Snooze) | 0.5.0 | `560974741a144501c1c61d043321a40c42809500409e06c0145ed91268a5144b` | LGPL-3.0 |
 | [symfony/deprecation-contracts](https://github.com/symfony/deprecation-contracts) | v3.8.1 | `23c2353ad960146de00ee3ec591d0b6a0828e1eb03d4131fcdd2a2ee7333d71e` | MIT |
 
 The archives are GitHub's tag tarballs (`https://codeload.github.com/<owner>/<name>/tar.gz/refs/tags/<version>`).
@@ -29,3 +30,10 @@ not bundled.
 `third_party/ext-encoding/` is [pmmp/ext-encoding](https://github.com/pmmp/ext-encoding) 1.0.0 (MIT, archive SHA-256
 `0a69c4e879eeb3ba71ffcf9fbee1fa35f5bec8a6e4686c412f3b2ec43c4f7bfe`), built into the plugin rather than into PHP:
 BedrockProtocol reads and writes packets with it.
+
+`scripts/build-php.sh` builds [pmmp/ext-pmmpthread](https://github.com/pmmp/ext-pmmpthread) 6.3.0 (PHP License,
+archive SHA-256 `c9896660c2d8ca56eb66de2ac2805e68aef39431e901b015511d212b052d3d26`) and
+[igbinary](https://github.com/igbinary/igbinary) 3.2.16 (BSD-3-Clause, archive SHA-256
+`941f1cf2ccbecdc1c221dbfae9213439d334be5d490a2f3da2be31e8a00b0cdb`) into PHP. On Windows the PHP is
+[PocketMine-MP's own build](https://github.com/pmmp/PHP-Binaries) 8.3.29, with the official build's embed library and
+headers.
