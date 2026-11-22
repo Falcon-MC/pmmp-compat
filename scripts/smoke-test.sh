@@ -17,7 +17,10 @@ python=python3
 if ! "$python" -c "" 2>/dev/null; then
     python=python
 fi
-"$python" "$root/scripts/make-phar.py" "$root/tests/phar/Beta" "$plugin/plugins/Beta.phar"
+for phar in "$root"/tests/phar/*/; do
+    name="$(basename "$phar")"
+    "$python" "$root/scripts/make-phar.py" "$phar" "$plugin/plugins/$name.phar"
+done
 
 # the plugins are enabled before the console is read, so a stop waiting on stdin ends the run
 (cd "$work" && printf 'stop\n' | PMMP_COMPAT_SELFTEST=1 "$server" --no-wizard > server.log 2>&1) || true
@@ -75,7 +78,19 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "6 PocketMine-MP plugins loaded, 9 could not be"
+expect "7 PocketMine-MP plugins loaded, 9 could not be"
+
+# the plugin base: logger, config.yml, resources, Config, TextFormat
+expect "[Basics] logger says hello"
+expect "[Basics] logger gives notice"
+expect "[Basics] logger warns"
+expect "[Basics] logger errs"
+expect "an exception logged on purpose"
+expect "fixture: Basics 27 of 27 checks passed"
+if grep -qF "logger debug stays hidden" "$log"; then
+    echo "a debug message reached the log"
+    failed=1
+fi
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

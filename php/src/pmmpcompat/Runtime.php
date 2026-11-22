@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace pmmpcompat;
 
 use pmmpcompat\plugin\FolderPluginLoader;
+use pocketmine\errorhandler\ErrorToExceptionHandler;
 use pocketmine\plugin\PharPluginLoader;
 use pocketmine\plugin\PluginEnableOrder;
 use pocketmine\plugin\PluginManager;
+use pocketmine\utils\Filesystem;
 
 /** Starts and stops the PocketMine-MP plugins inside Falcon. */
 final class Runtime{
@@ -15,6 +17,7 @@ final class Runtime{
     public const API_VERSION = '5.44.3';
 
     private static ?PluginManager $plugins = null;
+    private static ?ServerLogger $logger = null;
 
     private function __construct(){
     }
@@ -31,8 +34,16 @@ final class Runtime{
         $classes->addPath('pocketmine', $runtimeFolder . '/src/pocketmine');
         $classes->addPath('pmmpcompat', $runtimeFolder . '/src/pmmpcompat');
         $classes->addPath('Symfony\\Component\\Yaml', $runtimeFolder . '/vendor/symfony/yaml');
+        $classes->addPath('Symfony\\Component\\Filesystem', $runtimeFolder . '/vendor/symfony/filesystem');
+        // the log library's classes are global: \Logger, \PrefixedLogger
+        $classes->addPath('', $runtimeFolder . '/src/log');
         $classes->register();
         require_once $runtimeFolder . '/vendor/symfony/deprecation-contracts/function.php';
+        require_once $runtimeFolder . '/src/functions/yaml.php';
+        self::definePaths($runtimeFolder, $pluginFolder);
+        // as PocketMine-MP does: warnings and notices are thrown, plugins catch them as \ErrorException
+        ErrorToExceptionHandler::set();
+        self::$logger = new ServerLogger();
 
         $pluginsPath = $pluginFolder . '/plugins';
         $dataPath = $pluginFolder . '/plugin_data';
@@ -57,6 +68,23 @@ final class Runtime{
             . ($errors > 0 ? ', ' . $errors . ' could not be' : ''));
     }
 
+    // the constants PocketMine-MP defines at startup; the server's data folder is Falcon's
+    private static function definePaths(string $runtimeFolder, string $pluginFolder) : void{
+        $paths = [
+            'PATH' => $runtimeFolder . '/',
+            'RESOURCE_PATH' => $runtimeFolder . '/resources/',
+            'COMPOSER_AUTOLOADER_PATH' => $runtimeFolder . '/vendor/autoload.php',
+            'DATA' => str_replace('\\', '/', (string) getcwd()) . '/',
+            'PLUGIN_PATH' => $pluginFolder . '/plugins/',
+        ];
+        foreach($paths as $name => $path){
+            if(!defined('pocketmine\\' . $name)){
+                define('pocketmine\\' . $name, $path);
+            }
+        }
+        Filesystem::addCleanedPath(\pocketmine\PLUGIN_PATH, Filesystem::CLEAN_PATH_PLUGINS_PREFIX);
+    }
+
     public static function stop() : void{
         self::$plugins?->disablePlugins();
         self::$plugins = null;
@@ -64,5 +92,9 @@ final class Runtime{
 
     public static function plugins() : ?PluginManager{
         return self::$plugins;
+    }
+
+    public static function logger() : ServerLogger{
+        return self::$logger ??= new ServerLogger();
     }
 }

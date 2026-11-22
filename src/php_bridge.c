@@ -6,6 +6,7 @@
 #include <zend_gc.h>
 #include <zend_stream.h>
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -127,10 +128,24 @@ PHP_FUNCTION(falcon_guard) {
     RETURN_TRUE;
 }
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_falcon_warning, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, message, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+// raises an E_WARNING from the calling function, as an extension's function would; trigger_error() only has E_USER_*
+PHP_FUNCTION(falcon_warning) {
+    zend_string *message;
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(message)
+    ZEND_PARSE_PARAMETERS_END();
+    zend_error(E_WARNING, "%s", ZSTR_VAL(message));
+}
+
 static const zend_function_entry falcon_functions[] = {
     PHP_FE(falcon_log, arginfo_falcon_log)
     PHP_FE(falcon_plugin_folder, arginfo_falcon_plugin_folder)
     PHP_FE(falcon_guard, arginfo_falcon_guard)
+    PHP_FE(falcon_warning, arginfo_falcon_warning)
     PHP_FE_END
 };
 
@@ -144,7 +159,28 @@ static zend_module_entry falcon_module = {
 };
 
 // the embed SAPI resets its function list in php_embed_init, its startup hook is ours to set
+#ifdef PHP_WIN32
+// the extensions the official Windows build keeps outside php8ts.dll, beside the plugin in ext/
+static char *windows_ini = NULL;
+
+static void load_windows_extensions(sapi_module_struct *module) {
+    static const char extensions[] = "extension=mbstring\n";
+    const char *base = module->ini_entries != NULL ? module->ini_entries : "";
+    const char *folder = plugin_folder != NULL ? plugin_folder : ".";
+    const size_t length = strlen(base) + strlen(folder) + sizeof("extension_dir=\"/ext\"\n") + sizeof(extensions);
+    free(windows_ini);
+    windows_ini = malloc(length);
+    if (windows_ini == NULL)
+        return;
+    snprintf(windows_ini, length, "%sextension_dir=\"%s/ext\"\n%s", base, folder, extensions);
+    module->ini_entries = windows_ini;
+}
+#endif
+
 static zend_result startup_with_falcon(sapi_module_struct *module) {
+#ifdef PHP_WIN32
+    load_windows_extensions(module);
+#endif
     return php_module_startup(module, &falcon_module);
 }
 

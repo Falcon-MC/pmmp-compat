@@ -56,4 +56,6 @@ install(FILES plugin.json DESTINATION pmmp-compat)
 install(DIRECTORY php DESTINATION pmmp-compat)
 if (WIN32)
     install(FILES "${PMMP_PHP_PREFIX}/php8ts.dll" DESTINATION pmmp-compat)
+    # the official build ships mbstring as a dll the plugin loads at startup
+    install(FILES "${PMMP_PHP_PREFIX}/ext/php_mbstring.dll" DESTINATION pmmp-compat/ext)
 endif ()

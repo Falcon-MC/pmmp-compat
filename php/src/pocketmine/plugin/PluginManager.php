@@ -263,7 +263,8 @@ class PluginManager{
                     $problem = 'Main class must not be abstract';
                 }else{
                     // onLoad() runs inside the constructor
-                    $plugin = new $mainClass($loader, null, $description, $dataFolder, $prefixed);
+                    $plugin = new $mainClass($loader, null, $description, $dataFolder, $prefixed,
+                        new DiskResourceProvider($prefixed . '/resources/'));
                 }
             };
             // a missing trait or parent class is a fatal error, not an exception

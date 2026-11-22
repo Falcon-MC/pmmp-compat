@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace pocketmine\plugin;
 
-use pmmpcompat\Yaml;
-
 /** What a plugin's plugin.yml says about it */
 class PluginDescription{
     private const KEY_NAME = 'name';
@@ -69,7 +67,7 @@ class PluginDescription{
      */
     public function __construct(array|string $yamlString){
         if(is_string($yamlString)){
-            $map = Yaml::parse($yamlString);
+            $map = yaml_parse($yamlString);
             if($map === false){
                 throw new PluginDescriptionParseException('YAML parsing error in plugin manifest');
             }

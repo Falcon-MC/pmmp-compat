@@ -14,15 +14,22 @@ final class Log{
     }
 
     public static function info(string $message) : void{
-        falcon_log($message, self::INFO);
+        self::write($message, self::INFO);
     }
 
     public static function warning(string $message) : void{
-        falcon_log($message, self::WARNING);
+        self::write($message, self::WARNING);
     }
 
     public static function critical(string $message) : void{
-        falcon_log($message, self::ERROR);
+        self::write($message, self::ERROR);
+    }
+
+    // a line at a time, so each one carries the time and level
+    private static function write(string $message, int $level) : void{
+        foreach(explode("\n", str_replace("\r\n", "\n", $message)) as $line){
+            falcon_log($line, $level);
+        }
     }
 
     public static function exception(\Throwable $error) : void{

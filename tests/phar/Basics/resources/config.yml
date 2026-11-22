@@ -1,0 +1,7 @@
+# the default config, copied by saveDefaultConfig()
+greeting: hello
+nested:
+  answer: 42
+  list:
+    - one
+    - two

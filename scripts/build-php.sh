@@ -28,7 +28,7 @@ cd "$SOURCE"
 # position independent: the static library ends up inside the plugin's shared library
 export CFLAGS="${CFLAGS:--O2} -fPIC"
 
-# only what the prototype needs; extensions are added as plugins require them
+# what PocketMine-MP plugins expect; mbstring without its regular expressions, which need oniguruma
 ./configure \
     --prefix="$PREFIX" \
     --enable-embed=static \
@@ -43,7 +43,9 @@ export CFLAGS="${CFLAGS:--O2} -fPIC"
     --with-zlib \
     --enable-ctype \
     --enable-tokenizer \
-    --enable-filter
+    --enable-filter \
+    --enable-mbstring \
+    --disable-mbregex
 
 make -j"$JOBS"
 make install

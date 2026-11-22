@@ -1,0 +1,4 @@
+name: Basics
+version: 1.0.0
+main: basics\Main
+api: 5.0.0
