@@ -10,7 +10,6 @@
 </p>
 
 <p align="center">
-	<img src="https://img.shields.io/badge/status-early%20development-orange" alt="Status">
 	<img src="https://img.shields.io/badge/pocketmine%20api-5.x-blue" alt="PocketMine API 5">
 	<img src="https://img.shields.io/badge/language-C%2B%2B17%20%7C%20PHP%208-00599C" alt="Languages">
 	<img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platform">
@@ -45,23 +44,6 @@ usual, and each class forwards to Falcon.
   - blocks, entities and worlds, mapped to their Falcon counterparts.
 
 Plugins keep their own license. Only the code in this repository is under the license below.
-
-## Status
-
-Early development: plugins load, but most of the API they call is not there yet. The API is covered in the
-order the most used plugins need it. That order is measured on the most downloaded plugins of
-[Poggit](https://poggit.pmmp.io), not guessed.
-
-| Area | State |
-|---|---|
-| `plugin.yml`, `.phar` and source plugins, class loading, load order | Done |
-| Plugin lifecycle (`onLoad`, `onEnable`, `onDisable`) | In progress |
-| Events | Planned |
-| Commands and permissions | Planned |
-| Scheduler and async tasks | Planned |
-| `Config` | Planned |
-| Players, inventories and forms | Planned |
-| Worlds, blocks and entities | Planned |
 
 ## What will not work
 
