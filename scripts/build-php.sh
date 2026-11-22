@@ -10,6 +10,13 @@ cd "$(dirname "$0")/.."
 : "${PHP_SHA256:=0237af84478b7a7649d3964153f1b8653d622550b846f56d63062de683fb86bb}"
 : "${PMMPTHREAD_VERSION:=6.3.0}"
 : "${PMMPTHREAD_SHA256:=c9896660c2d8ca56eb66de2ac2805e68aef39431e901b015511d212b052d3d26}"
+: "${LIBZIP_VERSION:=1.11.4}"
+: "${LIBZIP_SHA256:=82e9f2f2421f9d7c2466bbc3173cd09595a88ea37db0d559a9d0a2dc60dc722e}"
+# pmmp's fork of Mojang's leveldb, the format Bedrock worlds are kept in, and its extension: not tagged
+: "${LEVELDB_COMMIT:=1c7564468b41610da4f498430e795ca4de0931ff}"
+: "${LEVELDB_SHA256:=503d46a827c39958d8195cdde9d0ee39f8896aaf9e8e82668961d9bd8250cf44}"
+: "${EXT_LEVELDB_COMMIT:=88071eb1b1eae96af043229104b9d813f7cbe40c}"
+: "${EXT_LEVELDB_SHA256:=6723f41667455dc5fb5e0a6b069fc9c83ec12e4e2d1ed2340033cd62584263ba}"
 : "${IGBINARY_VERSION:=3.2.16}"
 : "${IGBINARY_SHA256:=941f1cf2ccbecdc1c221dbfae9213439d334be5d490a2f3da2be31e8a00b0cdb}"
 PREFIX="${1:-$PWD/.toolchain/php}"
@@ -51,6 +58,41 @@ bundle() {
     rm -f "$SOURCE/configure"
 }
 
+# libraries the extensions need, built static into their own prefix so the plugin needs none on the server
+DEPS="$WORK/deps"
+dependency() {
+    local name="$1" version="$2" sum="$3" url="$4"
+    shift 4
+    if [ -f "$DEPS/.$name-$version" ]; then
+        return
+    fi
+    local archive="$WORK/$name-$version.tar.gz" source="$WORK/$name-$version"
+    curl -fsSL -A "pmmp-compat-build" -o "$archive" "$url"
+    verify "$sum" "$archive"
+    rm -rf "$source" && mkdir -p "$source"
+    tar -xzf "$archive" -C "$source" --strip-components 1
+    rm "$archive"
+    cmake -S "$source" -B "$source/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$DEPS" \
+        -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_SHARED_LIBS=OFF "$@"
+    cmake --build "$source/build" -j "$JOBS"
+    cmake --install "$source/build"
+    touch "$DEPS/.$name-$version"
+}
+dependency libzip "$LIBZIP_VERSION" "$LIBZIP_SHA256" \
+    "https://github.com/nih-at/libzip/releases/download/v$LIBZIP_VERSION/libzip-$LIBZIP_VERSION.tar.gz" \
+    -DBUILD_TOOLS=OFF -DBUILD_REGRESS=OFF -DBUILD_OSSFUZZ=OFF -DBUILD_EXAMPLES=OFF -DBUILD_DOC=OFF \
+    -DENABLE_BZIP2=OFF -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_MBEDTLS=OFF -DENABLE_OPENSSL=OFF \
+    -DENABLE_LZMA=OFF -DENABLE_ZSTD=OFF -DENABLE_WINDOWS_CRYPTO=OFF
+dependency leveldb "$LEVELDB_COMMIT" "$LEVELDB_SHA256" \
+    "https://github.com/pmmp/leveldb/archive/$LEVELDB_COMMIT.tar.gz" \
+    -DLEVELDB_BUILD_TESTS=OFF -DLEVELDB_BUILD_BENCHMARKS=OFF -DLEVELDB_SNAPPY=OFF -DLEVELDB_ZSTD=OFF \
+    -DLEVELDB_TCMALLOC=OFF
+export PKG_CONFIG_PATH="$DEPS/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+
+# leveldb's extension, for the plugins that read Bedrock worlds themselves
+bundle leveldb "$EXT_LEVELDB_COMMIT" "$EXT_LEVELDB_SHA256" \
+    "https://github.com/pmmp/php-leveldb/archive/$EXT_LEVELDB_COMMIT.tar.gz"
+
 # pmmpthread, PocketMine-MP's threads, and igbinary, which they pass values between threads with
 bundle pmmpthread "$PMMPTHREAD_VERSION" "$PMMPTHREAD_SHA256" \
     "https://github.com/pmmp/ext-pmmpthread/archive/refs/tags/$PMMPTHREAD_VERSION.tar.gz"
@@ -58,7 +100,8 @@ bundle igbinary "$IGBINARY_VERSION" "$IGBINARY_SHA256" \
     "https://github.com/igbinary/igbinary/archive/refs/tags/$IGBINARY_VERSION.tar.gz"
 
 cd "$SOURCE"
-if [ ! -f configure ] || ! grep -q "enable-pmmpthread" configure || ! grep -q "enable-igbinary" configure; then
+if [ ! -f configure ] || ! grep -q "enable-pmmpthread" configure || ! grep -q "enable-igbinary" configure \
+    || ! grep -q "with-leveldb" configure; then
     ./buildconf --force
 fi
 
@@ -114,11 +157,14 @@ export CFLAGS="${CFLAGS:--O2} -fPIC"
     --with-pdo-mysql=mysqlnd \
     --enable-pmmpthread \
     --enable-igbinary \
+    --with-zip \
+    --with-leveldb="$DEPS" \
     --with-pmmpthread-sockets \
     "${extra[@]}"
 
 make -j"$JOBS"
 make install
 # what php-config does not list: the archives given to configure through the environment
-echo "${OPENSSL_LIBS:-}" > "$PREFIX/lib/pmmp-extra-libs.txt"
+# and the static libraries the extensions were built against
+echo "${OPENSSL_LIBS:-} $DEPS/lib/libzip.a $DEPS/lib/libleveldb.a" > "$PREFIX/lib/pmmp-extra-libs.txt"
 echo "PHP $PHP_VERSION installed in $PREFIX"

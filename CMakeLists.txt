@@ -84,12 +84,12 @@ if (WIN32)
     # PocketMine-MP's build keeps these outside php8ts.dll: the plugin loads them at startup
     install(FILES "${PMMP_PHP_PREFIX}/ext/php_pmmpthread.dll" "${PMMP_PHP_PREFIX}/ext/php_openssl.dll"
             "${PMMP_PHP_PREFIX}/ext/php_igbinary.dll" "${PMMP_PHP_PREFIX}/ext/php_mysqli.dll"
-            "${PMMP_PHP_PREFIX}/ext/php_sqlite3.dll"
+            "${PMMP_PHP_PREFIX}/ext/php_sqlite3.dll" "${PMMP_PHP_PREFIX}/ext/php_leveldb.dll"
             DESTINATION pmmp-compat/ext)
     # what php8ts.dll and those load; the plugin points Windows at its own folder for them
     install(FILES "${PMMP_PHP_PREFIX}/libssh2.dll" "${PMMP_PHP_PREFIX}/nghttp2.dll"
             "${PMMP_PHP_PREFIX}/libcrypto-3-x64.dll" "${PMMP_PHP_PREFIX}/libssl-3-x64.dll"
             "${PMMP_PHP_PREFIX}/libsqlite3.dll" "${PMMP_PHP_PREFIX}/pthreadvc3.dll" "${PMMP_PHP_PREFIX}/yaml.dll"
-            "${PMMP_PHP_PREFIX}/deflate.dll"
+            "${PMMP_PHP_PREFIX}/deflate.dll" "${PMMP_PHP_PREFIX}/leveldb.dll"
             DESTINATION pmmp-compat OPTIONAL)
 endif ()

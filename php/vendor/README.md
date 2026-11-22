@@ -15,6 +15,8 @@ Copied as released, without their tests and command line tools. Each keeps its l
 | [ramsey/collection](https://github.com/ramsey/collection) | 2.1.1 | `54b69e8af6b249f27bc8b787cca58b41e8aba78272af8d41518bd1723181e931` | MIT |
 | [brick/math](https://github.com/brick/math) | 0.13.1 | `ad05e9fc391722f263acca6df51fdcdb66ab948f22cfd530972d782b8853d884` | MIT |
 | [pocketmine/snooze](https://github.com/pmmp/Snooze) | 0.5.0 | `560974741a144501c1c61d043321a40c42809500409e06c0145ed91268a5144b` | LGPL-3.0 |
+| [netresearch/jsonmapper](https://github.com/cweiske/jsonmapper) | v5.0.1 | `b5435e71f9b972c42365dccd9bb2b631d8efdd62081caf9d9f627bcf2e6aa69f` | OSL-3.0 |
+| [adhocore/json-comment](https://github.com/adhocore/php-json-comment) | 1.2.1 | `28767d0818e2f0df5e81415064483957ab7b7980ca92820fdb43f2ac4a10c36a` | MIT |
 | [symfony/deprecation-contracts](https://github.com/symfony/deprecation-contracts) | v3.8.1 | `23c2353ad960146de00ee3ec591d0b6a0828e1eb03d4131fcdd2a2ee7333d71e` | MIT |
 
 The archives are GitHub's tag tarballs (`https://codeload.github.com/<owner>/<name>/tar.gz/refs/tags/<version>`).

@@ -52,6 +52,9 @@ final class Runtime{
         // the log library's classes are global: \Logger, \PrefixedLogger
         $classes->addPath('', $runtimeFolder . '/src/log');
         $classes->addPath('pocketmine\\snooze', $runtimeFolder . '/vendor/pocketmine/snooze');
+        $classes->addPath('Ahc\\Json', $runtimeFolder . '/vendor/adhocore/json-comment');
+        // JsonMapper is global, its exception named PSR-0 style: JsonMapper_Exception in JsonMapper/Exception.php
+        $classes->addPath('', $runtimeFolder . '/vendor/netresearch/jsonmapper');
         $classes->register();
         require_once $runtimeFolder . '/vendor/autoload.php';
         self::definePaths($runtimeFolder, $pluginFolder);

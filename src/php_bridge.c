@@ -549,7 +549,7 @@ static char *windows_ini = NULL;
 
 static void load_windows_extensions(sapi_module_struct *module) {
     static const char extensions[] = "extension=pmmpthread\nextension=openssl\nextension=igbinary\n"
-                                     "extension=mysqli\nextension=sqlite3\n";
+                                     "extension=mysqli\nextension=sqlite3\nextension=leveldb\n";
     const char *base = module->ini_entries != NULL ? module->ini_entries : "";
     const char *folder = plugin_folder != NULL ? plugin_folder : ".";
     const size_t length = strlen(base) + strlen(folder) + sizeof("extension_dir=\"/ext\"\n") + sizeof(extensions);

@@ -184,6 +184,7 @@ expect "fixture: Keeper sqlite3 reads 100"
 expect "fixture: Keeper pdo counts 1, drivers mysql,sqlite"
 expect "fixture: Keeper mysqli ready, bcmath 0.3, igbinary 1, sockets ready"
 expect "fixture: Keeper yaml reads 0, 8, '010'"
+expect 'fixture: Keeper zip reads {"format_version": 2}, leveldb reads terrain, jsonmapper maps Steve, json-comment reads 1'
 expect "fixture: Keeper promise resolved with gold"
 expect "fixture: Keeper thread woke the server"
 expect "fixture: Keeper thread squared the sum: 100"

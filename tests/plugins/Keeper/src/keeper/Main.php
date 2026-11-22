@@ -47,6 +47,26 @@ final class Main extends PluginBase{
         $logger->info("fixture: Keeper yaml reads " . var_export($yaml["decimals"], true) . ", " . var_export($yaml["mode"], true)
             . ", " . var_export($yaml["name"], true));
 
+        $zipPath = $this->getDataFolder() . "pack.zip";
+        $zip = new \ZipArchive();
+        $zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $zip->addFromString("manifest.json", "{\"format_version\": 2}");
+        $zip->close();
+        $zip->open($zipPath);
+        $zipped = $zip->getFromName("manifest.json");
+        $zip->close();
+
+        $levelPath = $this->getDataFolder() . "level.db";
+        $level = new \LevelDB($levelPath, ["create_if_missing" => true]);
+        $level->put("chunk", "terrain");
+        $stored = $level->get("chunk");
+        unset($level);
+
+        $mapped = (new \JsonMapper())->map(json_decode("{\"name\": \"Steve\"}"), new Profile());
+        $commented = (new \Ahc\Json\Comment())->decode("{\"a\": 1 // one\n}", true);
+        $logger->info("fixture: Keeper zip reads " . $zipped . ", leveldb reads " . $stored . ", jsonmapper maps "
+            . $mapped->name . ", json-comment reads " . $commented["a"]);
+
         $resolver = new PromiseResolver();
         $resolver->getPromise()->onCompletion(
             fn(string $value) => $logger->info("fixture: Keeper promise resolved with $value"),
