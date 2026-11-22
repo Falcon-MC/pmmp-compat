@@ -37,14 +37,78 @@ class Item implements \JsonSerializable{
     /** @var EnchantmentInstance[] by enchantment object id */
     protected array $enchantments = [];
 
+    private string $identifier;
+    private ?ItemIdentifier $identifierObject = null;
+
+    /**
+     * @param ItemIdentifier|string $identifier the game's identifier, or the type id a plugin's own item class gives
+     * @param string[]              $enchantmentTags
+     */
     public function __construct(
-        private string $identifier,
-        protected string $name = ""
+        ItemIdentifier|string $identifier,
+        protected string $name = "",
+        private array $enchantmentTags = []
     ){
+        if($identifier instanceof ItemIdentifier){
+            $this->identifierObject = $identifier;
+            // an item of the plugin's own: a type of its own, which no Falcon item stands for
+            $identifier = "pmmpcompat:item_" . $identifier->getTypeId();
+        }
+        $this->identifier = $identifier;
         if($this->name === ""){
             $this->name = self::nameOf($identifier);
         }
         $this->nbt = new CompoundTag();
+    }
+
+    public function getIdentifier() : ItemIdentifier{
+        return $this->identifierObject ??= new ItemIdentifier($this->getTypeId());
+    }
+
+    /** @return string[] */
+    public function getEnchantmentTags() : array{
+        return $this->enchantmentTags;
+    }
+
+    public const TAG_NAME = "Name";
+    public const TAG_COUNT = "Count";
+    public const TAG_DAMAGE = "Damage";
+    public const TAG_TAG = "tag";
+    public const TAG_SLOT = "Slot";
+
+    /**
+     * The item as PocketMine-MP saves it: Name, Count, Damage and tag, and Slot when one is given.
+     */
+    public function nbtSerialize(int $slot = -1) : CompoundTag{
+        $result = CompoundTag::create()
+            ->setString(self::TAG_NAME, $this->identifier)
+            ->setByte(self::TAG_COUNT, \pocketmine\utils\Binary::signByte($this->count))
+            ->setShort(self::TAG_DAMAGE, $this->damage);
+        $tag = $this->getNamedTag();
+        if($tag->count() > 0){
+            $result->setTag(self::TAG_TAG, $tag);
+        }
+        if($slot !== -1){
+            $result->setByte(self::TAG_SLOT, $slot);
+        }
+        return $result;
+    }
+
+    /**
+     * An item PocketMine-MP saved; one it cannot know, such as an old numeric id, reads as air.
+     */
+    public static function nbtDeserialize(CompoundTag $tag) : Item{
+        $name = $tag->getTag(self::TAG_NAME);
+        $identifier = $name instanceof \pocketmine\nbt\tag\StringTag ? $name->getValue() : "";
+        $item = VanillaItems::fromIdentifier($identifier) ?? ($identifier !== "" && str_starts_with($identifier, "pmmpcompat:")
+            ? new Item($identifier) : VanillaItems::AIR());
+        $item->setCount(\pocketmine\utils\Binary::unsignByte($tag->getByte(self::TAG_COUNT, 1)));
+        $item->damage = max(0, $tag->getShort(self::TAG_DAMAGE, 0));
+        $named = $tag->getCompoundTag(self::TAG_TAG);
+        if($named !== null){
+            $item->setNamedTag($named);
+        }
+        return $item;
     }
 
     /** "minecraft:diamond_sword" reads "Diamond Sword" */
@@ -94,7 +158,7 @@ class Item implements \JsonSerializable{
     }
 
     public function getTypeId() : int{
-        return crc32($this->identifier);
+        return $this->identifierObject?->getTypeId() ?? crc32($this->identifier);
     }
 
     public function getStateId() : int{

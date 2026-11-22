@@ -147,6 +147,58 @@ class World implements ChunkManager{
         return $this->getChunk($chunkX, $chunkZ);
     }
 
+    /** how far around each player chunks are looked for: Falcon does not list the ones it holds */
+    private const LOADED_CHUNK_RADIUS = 10;
+
+    /**
+     * The chunks loaded around the players of this world, and around its spawn, by World::chunkHash().
+     * @return Chunk[]
+     */
+    public function getLoadedChunks() : array{
+        $centres = [$this->getSpawnLocation()];
+        foreach($this->getPlayers() as $player){
+            $centres[] = $player->getPosition();
+        }
+        $chunks = [];
+        foreach($centres as $centre){
+            $centreX = ((int) floor($centre->x)) >> Chunk::COORD_BIT_SIZE;
+            $centreZ = ((int) floor($centre->z)) >> Chunk::COORD_BIT_SIZE;
+            for($x = $centreX - self::LOADED_CHUNK_RADIUS; $x <= $centreX + self::LOADED_CHUNK_RADIUS; ++$x){
+                for($z = $centreZ - self::LOADED_CHUNK_RADIUS; $z <= $centreZ + self::LOADED_CHUNK_RADIUS; ++$z){
+                    $hash = self::chunkHash($x, $z);
+                    if(!isset($chunks[$hash]) && $this->isChunkLoaded($x, $z)){
+                        $chunks[$hash] = new FalconChunk($this, $x, $z);
+                    }
+                }
+            }
+        }
+        return $chunks;
+    }
+
+    public static function chunkHash(int $x, int $z) : int{
+        return (($x & 0xFFFFFFFF) << 32) | ($z & 0xFFFFFFFF);
+    }
+
+    public static function getXZ(int $hash, ?int &$x, ?int &$z) : void{
+        $x = $hash >> 32;
+        $z = ($hash & 0xFFFFFFFF) << 32 >> 32;
+    }
+
+    /** a block's coordinates in one int, 21 bits each; getBlockXYZ() reads them back */
+    public static function blockHash(int $x, int $y, int $z) : int{
+        return (($x & 0x1FFFFF) << 42) | (($y & 0x1FFFFF) << 21) | ($z & 0x1FFFFF);
+    }
+
+    public static function getBlockXYZ(int $hash, ?int &$x, ?int &$y, ?int &$z) : void{
+        $x = ($hash >> 42) << 43 >> 43;
+        $y = (($hash >> 21) & 0x1FFFFF) << 43 >> 43;
+        $z = ($hash & 0x1FFFFF) << 43 >> 43;
+    }
+
+    public static function chunkBlockHash(int $x, int $y, int $z) : int{
+        return self::blockHash($x, $y, $z);
+    }
+
     public function isChunkGenerated(int $chunkX, int $chunkZ) : bool{
         return $this->isChunkLoaded($chunkX, $chunkZ);
     }

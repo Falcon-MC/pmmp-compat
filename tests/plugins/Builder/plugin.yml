@@ -1,0 +1,4 @@
+name: Builder
+version: 1.0.0
+main: builder\Main
+api: 5.0.0

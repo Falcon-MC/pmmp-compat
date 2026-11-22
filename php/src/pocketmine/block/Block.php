@@ -23,15 +23,33 @@ class Block{
     /** @var array<string, bool|int|string> */
     private array $states;
 
+    private string $identifier;
+    private ?BlockIdentifier $idInfo = null;
+    private ?BlockTypeInfo $typeInfo = null;
+
     /**
-     * @param array<string, bool|int|string> $states
+     * Falcon's form, the identifier and its states, or PocketMine-MP's, a type id, a name and its type info, for
+     * the blocks plugins define.
+     *
+     * @param array<string, bool|int|string>|string $states the states, or the name in PocketMine-MP's form
      */
     public function __construct(
-        private string $identifier,
-        array $states = [],
-        protected string $fallbackName = ""
+        BlockIdentifier|string $identifier,
+        array|string $states = [],
+        protected string|BlockTypeInfo $fallbackName = ""
     ){
-        if($this->fallbackName === ""){
+        if($identifier instanceof BlockIdentifier){
+            $this->idInfo = $identifier;
+            $this->typeInfo = $fallbackName instanceof BlockTypeInfo ? $fallbackName : null;
+            $this->fallbackName = is_string($states) ? $states : "";
+            $states = [];
+            $identifier = "pmmpcompat:block_" . $this->idInfo->getBlockTypeId();
+        }elseif(is_string($states)){
+            $this->fallbackName = $states;
+            $states = [];
+        }
+        $this->identifier = $identifier;
+        if(!is_string($this->fallbackName) || $this->fallbackName === ""){
             $this->fallbackName = Item::nameOf($identifier);
         }
         ksort($states);
@@ -61,6 +79,7 @@ class Block{
             $identifier === "minecraft:water" || $identifier === "minecraft:flowing_water" => Water::class,
             $identifier === "minecraft:lava" || $identifier === "minecraft:flowing_lava" => Lava::class,
             $identifier === "minecraft:chest" || $identifier === "minecraft:trapped_chest" => Chest::class,
+            $identifier === "minecraft:hopper" => Hopper::class,
             str_ends_with($identifier, "_leaves") => Leaves::class,
             $info === null => Block::class,
             !$info["solid"] => Flowable::class,
@@ -177,7 +196,56 @@ class Block{
     }
 
     public function getTypeId() : int{
-        return crc32($this->identifier);
+        return $this->idInfo?->getBlockTypeId() ?? crc32($this->identifier);
+    }
+
+    public function getIdInfo() : BlockIdentifier{
+        return $this->idInfo ??= new BlockIdentifier($this->getTypeId());
+    }
+
+    public function getTypeInfo() : BlockTypeInfo{
+        return $this->typeInfo ??= new BlockTypeInfo($this->getBreakInfo());
+    }
+
+    public function hasSameTypeId(Block $other) : bool{
+        return $this->getTypeId() === $other->getTypeId();
+    }
+
+    public function hasTypeTag(string $tag) : bool{
+        return $this->typeInfo?->hasTypeTag($tag) ?? false;
+    }
+
+    /** @return string[] */
+    public function getTypeTags() : array{
+        return $this->typeInfo?->getTypeTags() ?? [];
+    }
+
+    private const COLORS = ["white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray",
+        "cyan", "purple", "blue", "brown", "green", "red", "black"];
+
+    /** the colour of a coloured block, wool, concrete, glass, carpet: its identifier says it */
+    public function getColor() : \pocketmine\block\utils\DyeColor{
+        $path = substr($this->identifier, strpos($this->identifier, ":") + 1);
+        foreach(array_merge(["light_blue", "light_gray"], self::COLORS) as $color){
+            if(str_starts_with($path, $color . "_")){
+                return constant(\pocketmine\block\utils\DyeColor::class . "::" . strtoupper($color));
+            }
+        }
+        return \pocketmine\block\utils\DyeColor::WHITE;
+    }
+
+    /** @return $this the same block in another colour */
+    public function setColor(\pocketmine\block\utils\DyeColor $color) : self{
+        $prefix = substr($this->identifier, 0, strpos($this->identifier, ":") + 1);
+        $path = substr($this->identifier, strlen($prefix));
+        foreach(array_merge(["light_blue", "light_gray"], self::COLORS) as $known){
+            if(str_starts_with($path, $known . "_")){
+                $wanted = strtolower($color->name);
+                $this->identifier = $prefix . $wanted . substr($path, strlen($known));
+                break;
+            }
+        }
+        return $this;
     }
 
     public function getStateId() : int{

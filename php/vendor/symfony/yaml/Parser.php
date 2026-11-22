@@ -292,7 +292,12 @@ class Parser
                     throw $e;
                 }
 
-                if (!\is_string($key) && !\is_int($key)) {
+                // pmmp-compat: null and boolean keys as the yaml extension reads them, as PHP array keys
+                if (null === $key || \is_bool($key)) {
+                    $key = null === $key ? '' : (int) $key;
+                }
+
+                if (!\is_string($key) && !\is_int($key) && !\is_float($key)) {
                     throw new ParseException((is_numeric($key) ? 'Numeric' : 'Non-string').' keys are not supported. Quote your evaluable mapping keys instead.', $this->getRealCurrentLineNb() + 1, $this->currentLine);
                 }
 

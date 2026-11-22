@@ -19,7 +19,8 @@ Copied as released, without their tests and command line tools. Each keeps its l
 
 The archives are GitHub's tag tarballs (`https://codeload.github.com/<owner>/<name>/tar.gz/refs/tags/<version>`).
 symfony/yaml stands in for the yaml extension, which the server's PHP is built without. `Inline.php` is patched to read
-unquoted numbers with a leading zero as YAML 1.1 octal, as that extension does (`00`, `010`). symfony/filesystem is the
+unquoted numbers with a leading zero as YAML 1.1 octal, as that extension does (`00`, `010`). `Parser.php` is patched
+to take `null`, `true` and `false` mapping keys as that extension does (`""`, `1`, `0`). symfony/filesystem is the
 `Path` and `Filesystem` PocketMine-MP ships and plugins use.
 
 `php/src/log/`, `php/src/pocketmine/errorhandler/` and much of `php/src/pocketmine/` (events, commands, permissions,

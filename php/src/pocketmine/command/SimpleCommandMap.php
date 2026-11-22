@@ -146,8 +146,23 @@ class SimpleCommandMap implements CommandMap{
         $this->knownCommands = [];
     }
 
+    /** @var \pmmpcompat\command\FalconCommand[] the built-in commands looked up so far, by name */
+    private array $builtIn = [];
+
+    /**
+     * A plugin's command, or one of PocketMine-MP's built-in ones, which are Falcon's: what plugins look up to
+     * replace or run them.
+     */
     public function getCommand(string $name) : ?Command{
-        return $this->knownCommands[$name] ?? null;
+        if(isset($this->knownCommands[$name])){
+            return $this->knownCommands[$name];
+        }
+        $plain = strtolower(str_starts_with($name, "pocketmine:") ? substr($name, strlen("pocketmine:")) : $name);
+        $plain = \pmmpcompat\command\FalconCommand::ALIASES[$plain] ?? $plain;
+        if(!in_array($plain, \pmmpcompat\command\FalconCommand::NAMES, true)){
+            return null;
+        }
+        return $this->builtIn[$plain] ??= new \pmmpcompat\command\FalconCommand($plain);
     }
 
     /**

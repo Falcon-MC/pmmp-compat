@@ -86,6 +86,7 @@ class Server{
         $this->pluginManager->tickSchedulers($this->tickCounter);
         // what other threads asked for: their notifications, then the async tasks done, then their log lines
         $this->tickSleeper->processNotifications();
+        $this->network?->tick();
         $this->asyncPool->collectTasks();
         $this->logger->flush();
         if($this->tickCounter % 1200 === 0){
@@ -113,6 +114,28 @@ class Server{
 
     public function getTickUsageAverage() : float{
         return $this->getTickUsage();
+    }
+
+    private ?\pocketmine\network\Network $network = null;
+    private ?ServerConfigGroup $configGroup = null;
+
+    /** the network interfaces plugins add, an RCON server of their own; players connect through Falcon */
+    public function getNetwork() : \pocketmine\network\Network{
+        return $this->network ??= new \pocketmine\network\Network();
+    }
+
+    /**
+     * pocketmine.yml beside the PocketMine-MP plugins, and Falcon's own server.properties, which have the same keys
+     * for what both servers know
+     */
+    public function getConfigGroup() : ServerConfigGroup{
+        if($this->configGroup === null){
+            $pocketmineYml = new \pocketmine\utils\Config(dirname(rtrim($this->pluginPath, "/\\")) . DIRECTORY_SEPARATOR . "pocketmine.yml", \pocketmine\utils\Config::YAML, []);
+            $properties = $this->dataPath . "server.properties";
+            $serverProperties = new \pocketmine\utils\Config(is_file($properties) ? $properties : $pocketmineYml->getPath() . ".properties", \pocketmine\utils\Config::PROPERTIES, []);
+            $this->configGroup = new ServerConfigGroup($pocketmineYml, $serverProperties);
+        }
+        return $this->configGroup;
     }
 
     /** the loader of the runtime's and plugins' classes, which threads register too */

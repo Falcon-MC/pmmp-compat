@@ -638,6 +638,7 @@ int pmmp_php_start(pmmp_log_sink sink, const char *folder) {
 // an uncaught exception is reported, a fatal error unwinds to here: neither reaches the server
 int pmmp_php_run_file(const char *path) {
     int failed = 1;
+    pmmp_watchdog_enter();
     zend_try {
         zend_file_handle handle;
         zend_stream_init_filename(&handle, path);
@@ -646,6 +647,7 @@ int pmmp_php_run_file(const char *path) {
     } zend_catch {
         failed = 1;
     } zend_end_try();
+    pmmp_watchdog_leave();
     return failed;
 }
 

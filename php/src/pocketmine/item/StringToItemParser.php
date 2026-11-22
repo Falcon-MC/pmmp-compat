@@ -51,6 +51,39 @@ final class StringToItemParser{
         return VanillaItems::fromIdentifier($key);
     }
 
+    public function parseBlock(string $input) : ?\pocketmine\block\Block{
+        $item = $this->parse($input);
+        if($item === null){
+            return null;
+        }
+        $block = $item->getBlock();
+        return $block->getFalconIdentifier() === "minecraft:air" && $item->getFalconIdentifier() !== "minecraft:air" ? null : $block;
+    }
+
+    /**
+     * the names an item goes by: the aliases registered for it, and its own identifier's
+     * @return string[]
+     */
+    public function lookupAliases(Item $item) : array{
+        $aliases = [];
+        foreach($this->callbackMap as $alias => $callback){
+            $made = $callback($alias);
+            if($made instanceof Item && $made->equals($item, true, false)){
+                $aliases[] = $alias;
+            }
+        }
+        $own = self::normalise($item->getFalconIdentifier());
+        if(!in_array($own, $aliases, true)){
+            $aliases[] = $own;
+        }
+        return $aliases;
+    }
+
+    /** @return string[] */
+    public function lookupBlockAliases(\pocketmine\block\Block $block) : array{
+        return $this->lookupAliases($block->asItem());
+    }
+
     /** @return string[] */
     public function getKnownAliases() : array{
         return array_keys($this->callbackMap);
