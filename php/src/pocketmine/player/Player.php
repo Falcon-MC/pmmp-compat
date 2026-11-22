@@ -98,6 +98,41 @@ class Player implements CommandSender{
         $this->nameTag = $name;
     }
 
+    public function getGamemode() : GameMode{
+        if(!$this->online){
+            return GameMode::SURVIVAL;
+        }
+        return \pmmpcompat\Bridge::gameMode(falcon_player_game_mode($this->handle)) ?? GameMode::SURVIVAL;
+    }
+
+    /** false when the player is offline or already in that game mode, as in PocketMine-MP */
+    public function setGamemode(GameMode $gameMode) : bool{
+        if(!$this->online || $this->getGamemode() === $gameMode){
+            return false;
+        }
+        falcon_player_set_game_mode($this->handle, \pmmpcompat\Bridge::falconGameMode($gameMode));
+        return $this->getGamemode() === $gameMode;
+    }
+
+    public function isSurvival(bool $literal = false) : bool{
+        $mode = $this->getGamemode();
+        return $mode === GameMode::SURVIVAL || (!$literal && $mode === GameMode::ADVENTURE);
+    }
+
+    public function isCreative(bool $literal = false) : bool{
+        $mode = $this->getGamemode();
+        return $mode === GameMode::CREATIVE || (!$literal && $mode === GameMode::SPECTATOR);
+    }
+
+    public function isAdventure(bool $literal = false) : bool{
+        $mode = $this->getGamemode();
+        return $mode === GameMode::ADVENTURE || (!$literal && $mode === GameMode::SPECTATOR);
+    }
+
+    public function isSpectator() : bool{
+        return $this->getGamemode() === GameMode::SPECTATOR;
+    }
+
     public function getXuid() : string{
         return $this->xuid;
     }

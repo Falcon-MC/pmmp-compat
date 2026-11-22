@@ -57,7 +57,8 @@ public:
 
         if (pmmp_php_run_file((runtime + "/bootstrap.php").c_str()) != 0)
             logger().error("the PocketMine-MP plugins did not all load: a fatal error stopped PHP");
-        pmmp_php_listen();
+        // every tick from now on, as long as the plugin is enabled
+        scheduler().repeat(1, [] { pmmp_php_tick(); });
         if (testing)
             playersTest();
         return true;
@@ -106,7 +107,11 @@ private:
             visitor->chat("hi everyone");
             visitor->chat("a secret plan");
             commands().execute("greet from the console");
-            visitor->kick("Bye from the test");
+            visitor->executeCommand("blocked thing");
+            visitor->setGameMode(falcon::GameMode::Creative);
+            visitor->setGameMode(falcon::GameMode::Adventure);
+            // after the game mode checks, which look a tick later
+            scheduler().delay(5, [visitor] { visitor->kick("Bye from the test"); });
         });
     }
 

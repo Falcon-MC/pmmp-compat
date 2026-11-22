@@ -7,7 +7,6 @@ namespace pocketmine\plugin;
 /**
  * What the server needs of a plugin's main class.
  *
- * getScheduler() comes with the scheduler.
  */
 interface Plugin{
     public function isEnabled() : bool;
@@ -27,4 +26,6 @@ interface Plugin{
     public function getServer() : \pocketmine\Server;
 
     public function getPluginLoader() : PluginLoader;
+
+    public function getScheduler() : \pocketmine\scheduler\TaskScheduler;
 }

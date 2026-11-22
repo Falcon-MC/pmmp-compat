@@ -9,15 +9,14 @@ use pocketmine\command\CommandExecutor;
 use pocketmine\command\CommandSender;
 use pocketmine\command\PluginCommand;
 use pocketmine\lang\KnownTranslationFactory;
+use pocketmine\scheduler\TaskScheduler;
 use pocketmine\Server;
 use pocketmine\utils\Config;
 use Symfony\Component\Filesystem\Path;
 
 /**
  * The class a plugin's main class extends: its lifecycle, logger, data folder, config.yml, resources and the
- * commands plugin.yml declares.
- *
- * The scheduler comes with its own part of the API.
+ * commands plugin.yml declares, and its scheduler.
  */
 abstract class PluginBase implements Plugin, CommandExecutor{
     private bool $isEnabled = false;
@@ -28,6 +27,7 @@ abstract class PluginBase implements Plugin, CommandExecutor{
     private string $configFile;
 
     private PluginLogger $logger;
+    private TaskScheduler $scheduler;
 
     public function __construct(
         private PluginLoader $loader,
@@ -45,6 +45,7 @@ abstract class PluginBase implements Plugin, CommandExecutor{
 
         $prefix = $this->description->getPrefix();
         $this->logger = new PluginLogger($server->getLogger(), $prefix !== '' ? $prefix : $this->getName());
+        $this->scheduler = new TaskScheduler($this->getFullName());
 
         $this->onLoad();
 
@@ -244,5 +245,9 @@ abstract class PluginBase implements Plugin, CommandExecutor{
 
     public function getPluginLoader() : PluginLoader{
         return $this->loader;
+    }
+
+    public function getScheduler() : TaskScheduler{
+        return $this->scheduler;
     }
 }

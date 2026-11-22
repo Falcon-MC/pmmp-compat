@@ -367,6 +367,7 @@ class PluginManager{
         $description = $plugin->getDescription();
         $name = $description->getName();
         Log::info('Enabling ' . $description->getFullName());
+        $plugin->getScheduler()->setEnabled(true);
         try{
             if(!falcon_guard(static fn() => $plugin->onEnableStateChange(true))){
                 Log::critical("Could not enable plugin '$name': " . self::FATAL);
@@ -459,7 +460,18 @@ class PluginManager{
             Log::critical("Error while disabling plugin '$name': " . $e->getMessage());
             Log::exception($e);
         }
+        $plugin->getScheduler()->shutdown();
         HandlerListManager::global()->unregisterAll($plugin);
+    }
+
+    /** runs what each enabled plugin scheduled for this tick */
+    public function tickSchedulers(int $currentTick) : void{
+        foreach($this->enabledPlugins as $name => $plugin){
+            // a task may have disabled another plugin earlier in this loop
+            if(isset($this->enabledPlugins[$name])){
+                $plugin->getScheduler()->mainThreadHeartbeat($currentTick);
+            }
+        }
     }
 
     /** a fatal error left the plugin in an unknown state: it is dropped, never called again */
@@ -467,6 +479,7 @@ class PluginManager{
         $name = $plugin->getDescription()->getName();
         unset($this->plugins[$name], $this->enabledPlugins[$name]);
         HandlerListManager::global()->unregisterAll($plugin);
+        $plugin->getScheduler()->shutdown();
         foreach($this->pluginDependents as $dependency => $dependents){
             unset($this->pluginDependents[$dependency][$name]);
             if(count($this->pluginDependents[$dependency]) === 0){

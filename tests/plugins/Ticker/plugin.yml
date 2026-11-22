@@ -1,0 +1,4 @@
+name: Ticker
+version: 1.0.0
+main: ticker\Main
+api: 5.0.0

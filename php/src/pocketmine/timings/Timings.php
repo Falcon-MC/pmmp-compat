@@ -33,4 +33,13 @@ abstract class Timings{
     public static function getEventHandlerTimings(string $event, string $handlerName, string $group) : TimingsHandler{
         return new TimingsHandler($event . " " . $handlerName, group: $group);
     }
+
+    public static function getScheduledTaskTimings(\pocketmine\scheduler\TaskHandler $task, int $period) : TimingsHandler{
+        return new TimingsHandler("Task: " . $task->getTaskName() . ($period > 0 ? " (interval:$period)" : " (Single)"),
+            group: $task->getOwnerName());
+    }
+
+    public static function getAsyncTaskRunTimings(\pocketmine\scheduler\AsyncTask $task) : TimingsHandler{
+        return new TimingsHandler("AsyncTask: " . $task::class, group: self::GROUP_BREAKDOWN);
+    }
 }

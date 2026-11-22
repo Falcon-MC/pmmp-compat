@@ -17,6 +17,7 @@ use pocketmine\lang\Translatable;
 use pocketmine\permission\DefaultPermissionNames;
 use pocketmine\player\Player;
 use pocketmine\plugin\PluginManager;
+use pocketmine\scheduler\AsyncPool;
 use pocketmine\utils\BroadcastLoggerForwarder;
 
 /**
@@ -36,6 +37,8 @@ class Server{
     private Language $language;
     private ConsoleCommandSender $console;
     private BroadcastLoggerForwarder $logForwarder;
+    private AsyncPool $asyncPool;
+    private int $tickCounter = 0;
 
     public static function getInstance() : Server{
         if(self::$instance === null){
@@ -57,6 +60,31 @@ class Server{
         $this->logForwarder = new BroadcastLoggerForwarder($this, $logger, $this->language);
         $this->commandMap = new SimpleCommandMap($this);
         $this->pluginManager = new PluginManager($this, $pluginDataPath);
+        $this->asyncPool = new AsyncPool();
+    }
+
+    /** @internal each of Falcon's ticks: the plugins' schedulers, then the async tasks */
+    public function tick() : void{
+        ++$this->tickCounter;
+        $this->pluginManager->tickSchedulers($this->tickCounter);
+        $this->asyncPool->collectTasks();
+    }
+
+    public function getTick() : int{
+        return $this->tickCounter;
+    }
+
+    /** Falcon runs at the game's 20 ticks a second */
+    public function getTicksPerSecond() : float{
+        return 20.0;
+    }
+
+    public function getTicksPerSecondAverage() : float{
+        return 20.0;
+    }
+
+    public function getAsyncPool() : AsyncPool{
+        return $this->asyncPool;
     }
 
     public function getName() : string{

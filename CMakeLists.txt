@@ -45,9 +45,9 @@ if (WIN32)
     target_link_libraries(PmmpCompat PRIVATE "${PMMP_LIBPHP_TS}")
     target_compile_definitions(PmmpCompat PRIVATE ZEND_WIN32 PHP_WIN32 ZTS=1 ZEND_DEBUG=0 WIN32 _WINDOWS)
 elseif (APPLE)
-    target_link_libraries(PmmpCompat PRIVATE resolv network m pthread z)
+    target_link_libraries(PmmpCompat PRIVATE resolv network m pthread z curl)
 elseif (UNIX)
-    target_link_libraries(PmmpCompat PRIVATE resolv m pthread z dl)
+    target_link_libraries(PmmpCompat PRIVATE resolv m pthread z dl curl)
 endif ()
 
 # the plugin folder a server takes: cmake --install build --prefix dist gives dist/pmmp-compat
@@ -57,5 +57,10 @@ install(DIRECTORY php DESTINATION pmmp-compat)
 if (WIN32)
     install(FILES "${PMMP_PHP_PREFIX}/php8ts.dll" DESTINATION pmmp-compat)
     # the official build ships mbstring as a dll the plugin loads at startup
-    install(FILES "${PMMP_PHP_PREFIX}/ext/php_mbstring.dll" DESTINATION pmmp-compat/ext)
+    install(FILES "${PMMP_PHP_PREFIX}/ext/php_mbstring.dll" "${PMMP_PHP_PREFIX}/ext/php_curl.dll"
+            DESTINATION pmmp-compat/ext)
+    # what php_curl.dll loads; the plugin points Windows at its own folder for them
+    install(FILES "${PMMP_PHP_PREFIX}/libssh2.dll" "${PMMP_PHP_PREFIX}/nghttp2.dll"
+            "${PMMP_PHP_PREFIX}/libcrypto-3-x64.dll" "${PMMP_PHP_PREFIX}/libssl-3-x64.dll"
+            DESTINATION pmmp-compat OPTIONAL)
 endif ()

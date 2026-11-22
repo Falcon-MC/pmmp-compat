@@ -20,7 +20,13 @@ final class Players{
     }
 
     public static function get(int $handle) : Player{
-        return self::$byHandle[$handle] ??= new Player(Server::getInstance(), $handle);
+        $player = self::$byHandle[$handle] ?? null;
+        // a handle Falcon reused for someone else: the one who had it left without a leave event
+        if($player !== null && $player->getName() !== falcon_player_name($handle)){
+            $player->onLeave();
+            $player = null;
+        }
+        return self::$byHandle[$handle] = $player ?? new Player(Server::getInstance(), $handle);
     }
 
     /** the player left: the object stays with whoever kept it, offline */

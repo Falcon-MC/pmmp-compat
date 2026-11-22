@@ -20,8 +20,8 @@ typedef void (*pmmp_log_sink)(enum pmmp_log_level level, const char *text, size_
 // the API table and this plugin's handle, before anything below touches Falcon
 void pmmp_php_set_falcon(const FalconServerApi *api, FalconPlugin *plugin);
 
-// passes Falcon's join, quit and chat events to the runtime, at each priority; once bootstrap.php has run
-void pmmp_php_listen(void);
+// one of Falcon's ticks: the plugins' scheduled and async tasks run
+void pmmp_php_tick(void);
 
 // starts the interpreter on the calling thread; folder is what falcon_plugin_folder() returns. 0 on success
 int pmmp_php_start(pmmp_log_sink sink, const char *folder);

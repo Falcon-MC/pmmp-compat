@@ -23,7 +23,9 @@ for phar in "$root"/tests/phar/*/; do
 done
 
 # the stop comes once the players test has run: it starts a second into the ticks
-(cd "$work" && (sleep 6; printf 'stop\n') | PMMP_COMPAT_SELFTEST=1 "$server" --no-wizard > server.log 2>&1) || true
+# console lines first: CommandEvent fires for typed commands, and "blocked" is one the Ticker plugin cancels
+(cd "$work" && (sleep 6; printf 'blocked thing\ngreet from stdin\n'; sleep 1; printf 'stop\n') \
+    | PMMP_COMPAT_SELFTEST=1 "$server" --no-wizard > server.log 2>&1) || true
 log="$work/server.log"
 cat "$log"
 
@@ -78,7 +80,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "8 PocketMine-MP plugins loaded, 9 could not be"
+expect "9 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -111,6 +113,28 @@ for refused in "Greeter ran secret for Visitor" "[Visitor] a secret plan"; do
         failed=1
     fi
 done
+
+# the scheduler, async tasks, utilities and the command and game mode events
+expect "fixture: Ticker singleton kept"
+expect "fixture: Ticker random repeats"
+expect "fixture: Ticker binary round trips"
+expect "fixture: Ticker curl ready for PocketMine-MP 5.44.3"
+expect "fixture: Ticker async progress halfway"
+expect "fixture: Ticker async result 6"
+expect "fixture: Ticker async error reported"
+expect "a task that fails on purpose"
+expect "fixture: Ticker delayed task ran at tick 5"
+expect "fixture: Ticker repeating task stopped after 3 runs"
+expect "fixture: Ticker saw Visitor ask for CREATIVE"
+expect "fixture: Ticker saw Visitor ask for ADVENTURE"
+expect "fixture: Ticker sees Visitor in CREATIVE"
+expect "fixture: Ticker saw command \"blocked thing\" from CONSOLE"
+expect "fixture: Ticker saw command \"greet from stdin\" from CONSOLE"
+expect "fixture: Greeter greeted CONSOLE as /greet from stdin"
+if grep -qF "Visitor in ADVENTURE" "$log"; then
+    echo "a cancelled game mode change went through"
+    failed=1
+fi
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

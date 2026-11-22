@@ -38,6 +38,7 @@ final class Runtime{
         $classes->addPath('pmmpcompat', $runtimeFolder . '/src/pmmpcompat');
         $classes->addPath('Symfony\\Component\\Yaml', $runtimeFolder . '/vendor/symfony/yaml');
         $classes->addPath('Symfony\\Component\\Filesystem', $runtimeFolder . '/vendor/symfony/filesystem');
+        $classes->addPath('DaveRandom\\CallbackValidator', $runtimeFolder . '/vendor/pocketmine/callback-validator');
         // the log library's classes are global: \Logger, \PrefixedLogger
         $classes->addPath('', $runtimeFolder . '/src/log');
         $classes->register();
@@ -69,6 +70,7 @@ final class Runtime{
         // the server is up by the time Falcon enables this plugin: both orders run now, startup first
         $manager->enablePlugins(PluginEnableOrder::STARTUP);
         $manager->enablePlugins(PluginEnableOrder::POSTWORLD);
+        Bridge::listen();
         $count = count($manager->getPlugins());
         Log::info($count . ' PocketMine-MP plugin' . ($count === 1 ? '' : 's') . ' loaded'
             . ($errors > 0 ? ', ' . $errors . ' could not be' : ''));
@@ -94,6 +96,9 @@ final class Runtime{
 
     public static function stop() : void{
         self::$plugins?->disablePlugins();
+        if(self::$plugins !== null){
+            Server::getInstance()->getAsyncPool()->shutdown();
+        }
         self::$plugins = null;
     }
 

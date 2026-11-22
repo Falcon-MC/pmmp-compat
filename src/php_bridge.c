@@ -234,6 +234,11 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_command_set_aliases, 0, 2, _IS_B
     ZEND_ARG_TYPE_INFO(0, aliases, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_long_void, 0, 2, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, value, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
 #define HANDLE_ARGUMENT(variable) \
     zend_long variable; \
     ZEND_PARSE_PARAMETERS_START(1, 1) \
@@ -281,6 +286,31 @@ PHP_FUNCTION(falcon_event_set_cancelled) {
         Z_PARAM_BOOL(cancelled)
     ZEND_PARSE_PARAMETERS_END();
     falcon->eventSetCancelled(HANDLE(FalconEvent, event), cancelled ? 1 : 0);
+}
+
+PHP_FUNCTION(falcon_event_state) {
+    HANDLE_ARGUMENT(event);
+    RETURN_BOOL(falcon->eventState(HANDLE(FalconEvent, event)) != 0);
+}
+
+PHP_FUNCTION(falcon_event_game_mode) {
+    HANDLE_ARGUMENT(event);
+    RETURN_LONG((zend_long) falcon->eventGameMode(HANDLE(FalconEvent, event)));
+}
+
+PHP_FUNCTION(falcon_player_game_mode) {
+    HANDLE_ARGUMENT(player);
+    RETURN_LONG((zend_long) falcon->playerGameMode(HANDLE(FalconPlayer, player)));
+}
+
+PHP_FUNCTION(falcon_player_set_game_mode) {
+    zend_long player;
+    zend_long gameMode;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(player)
+        Z_PARAM_LONG(gameMode)
+    ZEND_PARSE_PARAMETERS_END();
+    falcon->playerSetGameMode(HANDLE(FalconPlayer, player), (FalconGameMode) gameMode);
 }
 
 PHP_FUNCTION(falcon_player_name) {
@@ -392,6 +422,22 @@ static void pass_event(FalconEvent *event, void *subscription) {
     zval_ptr_dtor(&result);
 }
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_falcon_listen, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, type, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+// falcon_listen(type): Falcon passes that event to the Bridge at LOWEST to HIGHEST, PocketMine-MP's 5 to 1;
+// PocketMine-MP's MONITOR runs within HIGHEST
+PHP_FUNCTION(falcon_listen) {
+    zend_long type;
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_LONG(type)
+    ZEND_PARSE_PARAMETERS_END();
+    for (FalconEventPriority priority = FALCON_PRIORITY_LOWEST; priority <= FALCON_PRIORITY_HIGHEST; ++priority)
+        falcon->subscribe(falcon_plugin, (FalconEventType) type, priority, 0, pass_event,
+                          SUBSCRIPTION((uintptr_t) type, 5u - priority));
+}
+
 PHP_FUNCTION(falcon_register_command) {
     zend_string *name;
     zend_string *description;
@@ -454,6 +500,11 @@ static const zend_function_entry falcon_functions[] = {
     ZEND_RAW_FENTRY("falcon_event_cause", ZEND_FN(falcon_event_cause), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_event_is_cancelled", ZEND_FN(falcon_event_is_cancelled), arginfo_handle_bool, 0)
     ZEND_RAW_FENTRY("falcon_event_set_cancelled", ZEND_FN(falcon_event_set_cancelled), arginfo_handle_flag_void, 0)
+    ZEND_RAW_FENTRY("falcon_event_state", ZEND_FN(falcon_event_state), arginfo_handle_bool, 0)
+    ZEND_RAW_FENTRY("falcon_event_game_mode", ZEND_FN(falcon_event_game_mode), arginfo_handle_long, 0)
+    ZEND_RAW_FENTRY("falcon_player_game_mode", ZEND_FN(falcon_player_game_mode), arginfo_handle_long, 0)
+    ZEND_RAW_FENTRY("falcon_player_set_game_mode", ZEND_FN(falcon_player_set_game_mode), arginfo_handle_long_void, 0)
+    ZEND_RAW_FENTRY("falcon_listen", ZEND_FN(falcon_listen), arginfo_falcon_listen, 0)
     ZEND_RAW_FENTRY("falcon_player_name", ZEND_FN(falcon_player_name), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_player_xuid", ZEND_FN(falcon_player_xuid), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_player_is_op", ZEND_FN(falcon_player_is_op), arginfo_handle_bool, 0)
@@ -486,7 +537,7 @@ static zend_module_entry falcon_module = {
 static char *windows_ini = NULL;
 
 static void load_windows_extensions(sapi_module_struct *module) {
-    static const char extensions[] = "extension=mbstring\n";
+    static const char extensions[] = "extension=mbstring\nextension=curl\n";
     const char *base = module->ini_entries != NULL ? module->ini_entries : "";
     const char *folder = plugin_folder != NULL ? plugin_folder : ".";
     const size_t length = strlen(base) + strlen(folder) + sizeof("extension_dir=\"/ext\"\n") + sizeof(extensions);
@@ -501,6 +552,12 @@ static void load_windows_extensions(sapi_module_struct *module) {
 
 static zend_result startup_with_falcon(sapi_module_struct *module) {
 #ifdef PHP_WIN32
+    // the dlls the extensions load sit beside the plugin, which Windows does not look in by itself
+    if (plugin_folder != NULL) {
+        wchar_t folder[MAX_PATH];
+        if (MultiByteToWideChar(CP_UTF8, 0, plugin_folder, -1, folder, MAX_PATH) > 0)
+            SetDllDirectoryW(folder);
+    }
     load_windows_extensions(module);
 #endif
     return php_module_startup(module, &falcon_module);
@@ -538,14 +595,10 @@ void pmmp_php_set_falcon(const FalconServerApi *api, FalconPlugin *plugin) {
     falcon_plugin = plugin;
 }
 
-void pmmp_php_listen(void) {
-    static const FalconEventType types[] = {FALCON_EVENT_PLAYER_JOIN, FALCON_EVENT_PLAYER_QUIT, FALCON_EVENT_PLAYER_CHAT};
-    // Falcon's LOWEST to HIGHEST are PocketMine-MP's 5 to 1; PocketMine-MP's MONITOR runs within HIGHEST
-    for (size_t index = 0; index < sizeof(types) / sizeof(types[0]); ++index) {
-        for (FalconEventPriority priority = FALCON_PRIORITY_LOWEST; priority <= FALCON_PRIORITY_HIGHEST; ++priority)
-            falcon->subscribe(falcon_plugin, types[index], priority, 0, pass_event,
-                              SUBSCRIPTION(types[index], 5u - priority));
-    }
+void pmmp_php_tick(void) {
+    zval result;
+    call_bridge("pmmpcompat\\Bridge::tick", 0, NULL, &result);
+    zval_ptr_dtor(&result);
 }
 
 int pmmp_php_start(pmmp_log_sink sink, const char *folder) {

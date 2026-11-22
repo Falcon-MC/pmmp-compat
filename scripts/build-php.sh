@@ -45,7 +45,8 @@ export CFLAGS="${CFLAGS:--O2} -fPIC"
     --enable-tokenizer \
     --enable-filter \
     --enable-mbstring \
-    --disable-mbregex
+    --disable-mbregex \
+    --with-curl
 
 make -j"$JOBS"
 make install
