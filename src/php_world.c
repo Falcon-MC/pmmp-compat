@@ -506,6 +506,77 @@ PHP_FUNCTION(falcon_event_item) {
     item_to_array(item, return_value);
 }
 
+// --- packets, forms and the player's identity ---
+
+PHP_FUNCTION(falcon_player_send_packet) {
+    zend_long player, packetId;
+    zend_string *payload;
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_LONG(player)
+        Z_PARAM_LONG(packetId)
+        Z_PARAM_STR(payload)
+    ZEND_PARSE_PARAMETERS_END();
+    RETURN_BOOL(falcon->playerSendPacket(HANDLE(FalconPlayer, player), (uint32_t) packetId,
+                                         (const uint8_t *) ZSTR_VAL(payload), (uint32_t) ZSTR_LEN(payload)) != 0);
+}
+
+// [packet id, payload without its header]
+PHP_FUNCTION(falcon_event_packet) {
+    ARGUMENTS_1(event);
+    FalconEvent *target = HANDLE(FalconEvent, event);
+    uint32_t length = 0;
+    const uint8_t *data = falcon->eventPacketData(target, &length);
+    array_init_size(return_value, 2);
+    add_next_index_long(return_value, (zend_long) falcon->eventPacketId(target));
+    add_next_index_stringl(return_value, data != NULL ? (const char *) data : "", data != NULL ? length : 0);
+}
+
+PHP_FUNCTION(falcon_event_set_packet) {
+    zend_long event;
+    zend_string *payload;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(event)
+        Z_PARAM_STR(payload)
+    ZEND_PARSE_PARAMETERS_END();
+    falcon->eventSetPacketData(HANDLE(FalconEvent, event), (const uint8_t *) ZSTR_VAL(payload),
+                               (uint32_t) ZSTR_LEN(payload));
+}
+
+PHP_FUNCTION(falcon_player_send_form) {
+    zend_long player;
+    zend_string *json;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(player)
+        Z_PARAM_STR(json)
+    ZEND_PARSE_PARAMETERS_END();
+    RETURN_LONG((zend_long) falcon->playerSendForm(HANDLE(FalconPlayer, player), ZSTR_VAL(json)));
+}
+
+// [form id, response JSON]
+PHP_FUNCTION(falcon_event_form) {
+    ARGUMENTS_1(event);
+    FalconEvent *target = HANDLE(FalconEvent, event);
+    array_init_size(return_value, 2);
+    add_next_index_long(return_value, (zend_long) falcon->eventFormId(target));
+    const char *response = falcon->eventFormResponse(target);
+    add_next_index_string(return_value, response != NULL ? response : "null");
+}
+
+PHP_FUNCTION(falcon_player_uuid) {
+    ARGUMENTS_1(player);
+    return_text(return_value, falcon->playerUuid(HANDLE(FalconPlayer, player)));
+}
+
+PHP_FUNCTION(falcon_player_address) {
+    ARGUMENTS_1(player);
+    return_text(return_value, falcon->playerAddress(HANDLE(FalconPlayer, player)));
+}
+
+PHP_FUNCTION(falcon_player_protocol) {
+    ARGUMENTS_1(player);
+    RETURN_LONG((zend_long) falcon->playerProtocolVersion(HANDLE(FalconPlayer, player)));
+}
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_any, 0, 0, 0)
     ZEND_ARG_VARIADIC_INFO(0, arguments)
 ZEND_END_ARG_INFO()
@@ -557,5 +628,13 @@ const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_event_set_to)
     ENTRY(falcon_event_position)
     ENTRY(falcon_event_item)
+    ENTRY(falcon_player_send_packet)
+    ENTRY(falcon_event_packet)
+    ENTRY(falcon_event_set_packet)
+    ENTRY(falcon_player_send_form)
+    ENTRY(falcon_event_form)
+    ENTRY(falcon_player_uuid)
+    ENTRY(falcon_player_address)
+    ENTRY(falcon_player_protocol)
     PHP_FE_END
 };

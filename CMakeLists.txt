@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(PmmpCompat C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+# pmmp's ext-encoding, built into the plugin for BedrockProtocol, is C++20
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 
@@ -30,8 +31,13 @@ endif ()
 falcon_add_plugin(PmmpCompat
     src/PmmpCompat.cpp
     src/php_bridge.c
-    src/php_world.c)
+    src/php_world.c
+    third_party/ext-encoding/encoding.cpp
+    third_party/ext-encoding/classes/ByteBufferReader.cpp
+    third_party/ext-encoding/classes/ByteBufferWriter.cpp
+    third_party/ext-encoding/classes/Types.cpp)
 target_include_directories(PmmpCompat PRIVATE
+    "${CMAKE_SOURCE_DIR}/third_party/ext-encoding"
     "${CMAKE_SOURCE_DIR}/src"
     "${PMMP_PHP_INCLUDE}"
     "${PMMP_PHP_INCLUDE}/main"

@@ -516,10 +516,15 @@ static const zend_function_entry falcon_functions[] = {
     PHP_FE_END
 };
 
-// the world, block, item and entity functions live in php_world.c
+// pmmp's ext-encoding, compiled into this plugin: BedrockProtocol reads and writes packets with it
+extern zend_module_entry encoding_module_entry;
+
+// the world, block, item and entity functions live in php_world.c; ext-encoding's classes start with this module,
+// as a second module could only start once the engine no longer takes new persistent strings
 static PHP_MINIT_FUNCTION(falcon) {
-    (void) type;
-    return zend_register_functions(NULL, falcon_world_functions, NULL, MODULE_PERSISTENT);
+    if (zend_register_functions(NULL, falcon_world_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
+        return FAILURE;
+    return encoding_module_entry.module_startup_func(type, module_number);
 }
 
 static zend_module_entry falcon_module = {

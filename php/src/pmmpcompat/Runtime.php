@@ -42,11 +42,16 @@ final class Runtime{
         foreach(['math', 'nbt', 'color'] as $library){
             $classes->addPath('pocketmine\\' . $library, $runtimeFolder . '/vendor/pocketmine/' . $library);
         }
+        $classes->addPath('pocketmine\\network\\mcpe\\protocol', $runtimeFolder . '/vendor/pocketmine/bedrock-protocol');
+        $classes->addPath('Ramsey\\Uuid', $runtimeFolder . '/vendor/ramsey/uuid');
+        $classes->addPath('Ramsey\\Collection', $runtimeFolder . '/vendor/ramsey/collection');
+        $classes->addPath('Brick\\Math', $runtimeFolder . '/vendor/brick/math');
         // the log library's classes are global: \Logger, \PrefixedLogger
         $classes->addPath('', $runtimeFolder . '/src/log');
         $classes->register();
         require_once $runtimeFolder . '/vendor/symfony/deprecation-contracts/function.php';
         require_once $runtimeFolder . '/src/functions/yaml.php';
+        require_once $runtimeFolder . '/vendor/ramsey/uuid/functions.php';
         self::definePaths($runtimeFolder, $pluginFolder);
         // as PocketMine-MP does: warnings and notices are thrown, plugins catch them as \ErrorException
         ErrorToExceptionHandler::set();

@@ -6,7 +6,12 @@ namespace pocketmine\player;
 
 use pocketmine\command\CommandSender;
 use pocketmine\entity\Human;
+use pocketmine\form\Form;
+use pocketmine\form\FormValidationException;
 use pocketmine\inventory\PlayerInventory;
+use pocketmine\network\mcpe\NetworkSession;
+use Ramsey\Uuid\Uuid;
+use Ramsey\Uuid\UuidInterface;
 use pocketmine\lang\Language;
 use pocketmine\lang\Translatable;
 use pocketmine\permission\DefaultPermissions;
@@ -37,6 +42,9 @@ class Player extends Human implements CommandSender{
     /** what the next leave message is to be, when a kick names one */
     private Translatable|string|null $quitMessage = null;
     private PlayerInventory $inventory;
+    private NetworkSession $networkSession;
+    /** @var Form[] by Falcon's form id */
+    private array $forms = [];
 
     /** @internal the runtime makes one for each of Falcon's players */
     public function __construct(
@@ -45,6 +53,7 @@ class Player extends Human implements CommandSender{
     ){
         parent::__construct(falcon_entity_runtime_id(falcon_player_entity($handle)));
         $this->inventory = new PlayerInventory($this);
+        $this->networkSession = new NetworkSession($this);
         $this->username = falcon_player_name($handle);
         $this->displayName = $this->username;
         $this->xuid = falcon_player_xuid($handle);
@@ -69,6 +78,51 @@ class Player extends Human implements CommandSender{
 
     public function getInventory() : PlayerInventory{
         return $this->inventory;
+    }
+
+    public function getNetworkSession() : NetworkSession{
+        return $this->networkSession;
+    }
+
+    public function getUniqueId() : UuidInterface{
+        $uuid = $this->online ? falcon_player_uuid($this->handle) : "";
+        return Uuid::isValid($uuid) ? Uuid::fromString($uuid) : Uuid::uuid3(Uuid::NIL, $this->username);
+    }
+
+    /** shows the form; Falcon numbers it, and its answer comes back to handleResponse() */
+    public function sendForm(Form $form) : void{
+        if(!$this->online){
+            return;
+        }
+        $json = json_encode($form, JSON_THROW_ON_ERROR);
+        $id = falcon_player_send_form($this->handle, $json);
+        if($id !== 0){
+            $this->forms[$id] = $form;
+        }
+    }
+
+    /** @internal the player answered or closed a form */
+    public function onFormSubmit(int $formId, mixed $responseData) : bool{
+        if(!isset($this->forms[$formId])){
+            return false;
+        }
+        try{
+            $this->forms[$formId]->handleResponse($this, $responseData);
+        }catch(FormValidationException $e){
+            $this->getServer()->getLogger()->critical("Failed to validate form " . get_class($this->forms[$formId]) . ": " . $e->getMessage());
+            $this->getServer()->getLogger()->logException($e);
+        }finally{
+            unset($this->forms[$formId]);
+        }
+        return true;
+    }
+
+    public function hasPendingForm(int $formId) : bool{
+        return isset($this->forms[$formId]);
+    }
+
+    public function closeAllForms() : void{
+        $this->networkSession->onCloseAllForms();
     }
 
     /** @internal the leave message a kick asked for, once */

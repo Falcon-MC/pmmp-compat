@@ -19,6 +19,10 @@ use pocketmine\event\player\PlayerToggleFlightEvent;
 use pocketmine\event\player\PlayerToggleSneakEvent;
 use pocketmine\event\player\PlayerToggleSprintEvent;
 use pocketmine\event\server\CommandEvent;
+use pocketmine\event\server\DataPacketReceiveEvent;
+use pocketmine\event\server\DataPacketSendEvent;
+use pocketmine\network\mcpe\protocol\ServerboundPacket;
+use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\block\BaseSign;
 use pocketmine\block\Block;
 use pocketmine\block\utils\SignText;
@@ -79,15 +83,46 @@ final class Bridge{
     private const PLAYER_TELEPORT = 70;
     private const PLAYER_ITEM_USE = 71;
     private const ENTITY_TELEPORT = 83;
+    private const DATA_PACKET_RECEIVE = 14;
+    private const DATA_PACKET_SEND = 15;
+    private const PLAYER_FORM_RESPONSE = 69;
 
-    /** what the runtime listens to; each becomes a PocketMine-MP event in create() */
-    private const LISTENED = [
-        self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_CHAT, self::PLAYER_COMMAND, self::SERVER_COMMAND,
-        self::PLAYER_GAME_MODE_CHANGE, self::PLAYER_PRE_LOGIN, self::PLAYER_TOGGLE_SNEAK, self::PLAYER_TOGGLE_SPRINT,
-        self::PLAYER_TOGGLE_FLIGHT, self::PLAYER_JUMP, self::PLAYER_EMOTE, self::BLOCK_BREAK, self::BLOCK_PLACE,
-        self::PLAYER_INTERACT_BLOCK, self::ENTITY_DAMAGE, self::ENTITY_DEATH, self::PLAYER_DEATH, self::PLAYER_RESPAWN,
-        self::PLAYER_MOVE, self::SIGN_CHANGE, self::PLAYER_TELEPORT, self::PLAYER_ITEM_USE, self::ENTITY_TELEPORT,
+    /** what the runtime always listens to: it keeps its players and forms with them */
+    private const ALWAYS = [self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_FORM_RESPONSE];
+
+    /** the PocketMine-MP events each Falcon event becomes; Falcon passes it once a listener wants one of them */
+    private const SOURCES = [
+        self::PLAYER_CHAT => [PlayerChatEvent::class],
+        self::PLAYER_COMMAND => [CommandEvent::class],
+        self::SERVER_COMMAND => [CommandEvent::class],
+        self::PLAYER_GAME_MODE_CHANGE => [PlayerGameModeChangeEvent::class],
+        self::PLAYER_PRE_LOGIN => [PlayerLoginEvent::class],
+        self::PLAYER_TOGGLE_SNEAK => [PlayerToggleSneakEvent::class],
+        self::PLAYER_TOGGLE_SPRINT => [PlayerToggleSprintEvent::class],
+        self::PLAYER_TOGGLE_FLIGHT => [PlayerToggleFlightEvent::class],
+        self::PLAYER_JUMP => [PlayerJumpEvent::class],
+        self::PLAYER_EMOTE => [PlayerEmoteEvent::class],
+        self::BLOCK_BREAK => [BlockBreakEvent::class],
+        self::BLOCK_PLACE => [BlockPlaceEvent::class],
+        self::PLAYER_INTERACT_BLOCK => [PlayerInteractEvent::class],
+        self::ENTITY_DAMAGE => [EntityDamageEvent::class, EntityDamageByEntityEvent::class],
+        self::ENTITY_DEATH => [EntityDeathEvent::class],
+        self::PLAYER_DEATH => [PlayerDeathEvent::class],
+        self::PLAYER_RESPAWN => [PlayerRespawnEvent::class],
+        self::PLAYER_MOVE => [PlayerMoveEvent::class],
+        self::SIGN_CHANGE => [SignChangeEvent::class],
+        self::PLAYER_TELEPORT => [EntityTeleportEvent::class],
+        self::PLAYER_ITEM_USE => [PlayerItemUseEvent::class],
+        self::ENTITY_TELEPORT => [EntityTeleportEvent::class],
+        self::DATA_PACKET_RECEIVE => [DataPacketReceiveEvent::class],
+        self::DATA_PACKET_SEND => [DataPacketSendEvent::class],
     ];
+
+    /** @var array<int, true> the Falcon events passed here so far */
+    private static array $listening = [];
+
+    /** what a send listener asked to go out in place of a packet goes out without coming back here */
+    private static bool $resending = false;
 
     /** @var array<int, array{event: Event, message: string, recipients: object[], sender: ?object}> by handle */
     private static array $inFlight = [];
@@ -95,9 +130,30 @@ final class Bridge{
     private function __construct(){
     }
 
-    /** @internal once the plugins are enabled: Falcon starts passing its events */
+    /** @internal at startup: what the runtime itself needs */
     public static function listen() : void{
-        foreach(self::LISTENED as $type){
+        foreach(self::ALWAYS as $type){
+            self::listenTo($type);
+        }
+    }
+
+    /**
+     * @internal a listener for that event class was registered: the Falcon events it can come from are passed from
+     * now on, a listener for a parent class such as PlayerEvent taking all of its children's
+     */
+    public static function listenFor(string $eventClass) : void{
+        foreach(self::SOURCES as $type => $classes){
+            foreach($classes as $class){
+                if(is_a($class, $eventClass, true)){
+                    self::listenTo($type);
+                }
+            }
+        }
+    }
+
+    private static function listenTo(int $type) : void{
+        if(!isset(self::$listening[$type])){
+            self::$listening[$type] = true;
             falcon_listen($type);
         }
     }
@@ -284,6 +340,30 @@ final class Bridge{
                 $against = $world->getBlock($position);
                 return self::state(new BlockPlaceEvent($player, $transaction, $against,
                     $player->getInventory()->getItemInHand()), $message, $handle);
+            case self::PLAYER_FORM_RESPONSE:
+                // not an event in PocketMine-MP: the form the player answered gets the answer, once
+                if($player !== null){
+                    [$formId, $response] = falcon_event_form($handle);
+                    $player->onFormSubmit($formId, json_decode($response, true));
+                }
+                return null;
+            case self::DATA_PACKET_RECEIVE:
+            case self::DATA_PACKET_SEND:
+                // decoded only for listeners: most packets pass with nobody looking
+                $receiving = $type === self::DATA_PACKET_RECEIVE;
+                if($player === null || self::$resending
+                    || !($receiving ? DataPacketReceiveEvent::hasHandlers() : DataPacketSendEvent::hasHandlers())){
+                    return null;
+                }
+                [$packetId, $payload] = falcon_event_packet($handle);
+                $packet = Packets::decode($packetId, $payload);
+                if($receiving){
+                    return $packet instanceof ServerboundPacket
+                        ? self::state(new DataPacketReceiveEvent($player->getNetworkSession(), $packet), $message, $handle) : null;
+                }
+                return $packet instanceof ClientboundPacket
+                    ? self::state(new DataPacketSendEvent([$player->getNetworkSession()], [$packet]), $message, $handle)
+                        + ['packets' => [$packet]] : null;
             case self::SIGN_CHANGE:
                 if($player === null){
                     return null;
@@ -403,6 +483,19 @@ final class Bridge{
             }
         }elseif($event instanceof PlayerDeathEvent){
             self::applyMessage($handle, $state, self::text($event->getDeathMessage()));
+        }elseif($event instanceof DataPacketSendEvent && $last && !$event->isCancelled() && $event->getPackets() !== $state['packets']){
+            // other packets in its place: they go out here, the one Falcon held does not
+            falcon_event_set_cancelled($handle, true);
+            self::$resending = true;
+            try{
+                foreach($event->getTargets() as $target){
+                    foreach($event->getPackets() as $packet){
+                        $target->sendDataPacket($packet);
+                    }
+                }
+            }finally{
+                self::$resending = false;
+            }
         }elseif($event instanceof SignChangeEvent){
             self::applyMessage($handle, $state, implode("\n", $event->getNewText()->getLines()));
         }elseif($event instanceof PlayerChatEvent){

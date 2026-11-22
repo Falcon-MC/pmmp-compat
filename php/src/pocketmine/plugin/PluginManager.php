@@ -587,6 +587,7 @@ class PluginManager{
         $timings = Timings::getEventHandlerTimings($event, $handlerName, $plugin->getDescription()->getFullName());
         $registeredListener = new RegisteredListener($handler, $priority, $plugin, $handleCancelled, $timings);
         HandlerListManager::global()->getListFor($event)->register($registeredListener);
+        \pmmpcompat\Bridge::listenFor($event);
         return $registeredListener;
     }
 }

@@ -1,0 +1,4 @@
+name: Courier
+version: 1.0.0
+main: courier\Main
+api: 5.0.0

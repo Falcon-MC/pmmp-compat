@@ -80,7 +80,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "10 PocketMine-MP plugins loaded, 9 could not be"
+expect "11 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -150,6 +150,12 @@ expect "fixture: Explorer saw Visitor teleport 3 blocks"
 expect "fixture: Explorer saw Visitor take 4 damage, cause 14"
 expect "fixture: Explorer sees Visitor at 19 health"
 expect "fixture: Explorer saw Visitor die"
+
+# packets, forms, a player's connection and the entity register
+expect "fixture: Courier registered its npc as courier:npc"
+expect "fixture: Courier packet round trips, protocol 1.26.30, pool ready"
+expect "fixture: Courier sees Visitor with uuid set and protocol known"
+expect "fixture: Courier sent a form and a packet: sent"
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"
