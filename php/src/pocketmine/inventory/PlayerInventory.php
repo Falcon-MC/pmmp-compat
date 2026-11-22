@@ -4,146 +4,58 @@ declare(strict_types=1);
 
 namespace pocketmine\inventory;
 
+use pmmpcompat\inventory\FalconSlotsInventory;
+use pocketmine\entity\Human;
 use pocketmine\item\Item;
-use pocketmine\item\VanillaItems;
 use pocketmine\player\Player;
+use pocketmine\utils\ObjectSet;
 
-/**
- * A player's inventory, read from and written to Falcon's: hotbar first, then the rest.
- *
- * The rest of PocketMine-MP's inventory API, windows and listeners, comes with the inventories.
- */
-class PlayerInventory{
+/** A player's inventory, Falcon's: the hotbar is its first nine slots */
+class PlayerInventory extends FalconSlotsInventory{
+    /** @var ObjectSet<\Closure(int $oldIndex) : void> */
+    protected ObjectSet $heldItemIndexChangeListeners;
+
     public function __construct(
-        private Player $holder
+        protected Human $holder
     ){
-    }
-
-    public function getHolder() : Player{
-        return $this->holder;
+        $this->heldItemIndexChangeListeners = new ObjectSet();
+        parent::__construct();
     }
 
     private function handle() : int{
-        return $this->holder->isOnline() ? $this->holder->getHandle() : 0;
+        return $this->holder instanceof Player && $this->holder->isOnline() ? $this->holder->getHandle() : 0;
     }
 
     public function getSize() : int{
         $handle = $this->handle();
-        return $handle === 0 ? 0 : falcon_player_inventory_size($handle);
+        return $handle === 0 ? 36 : falcon_player_inventory_size($handle);
     }
 
-    public function getHotbarSize() : int{
-        return 9;
-    }
-
-    public function getItem(int $index) : Item{
+    protected function readSlot(int $index) : ?array{
         $handle = $this->handle();
-        $data = $handle === 0 ? null : falcon_player_inventory_item($handle, $index);
-        return $data === null ? VanillaItems::AIR() : Item::fromFalcon($data);
+        return $handle === 0 ? null : falcon_player_inventory_item($handle, $index);
     }
 
-    public function setItem(int $index, Item $item) : void{
+    protected function writeSlot(int $index, array $item) : void{
         $handle = $this->handle();
         if($handle !== 0){
-            falcon_player_set_inventory_item($handle, $index, $item->isNull() ? VanillaItems::AIR()->setCount(0)->toFalcon() : $item->toFalcon());
+            falcon_player_set_inventory_item($handle, $index, $item);
         }
     }
 
-    /**
-     * @return Item[] by slot, the empty ones left out unless asked for
-     */
-    public function getContents(bool $includeEmpty = false) : array{
-        $contents = [];
-        for($slot = 0, $size = $this->getSize(); $slot < $size; ++$slot){
-            $item = $this->getItem($slot);
-            if($includeEmpty || !$item->isNull()){
-                $contents[$slot] = $item;
-            }
-        }
-        return $contents;
+    public function isHotbarSlot(int $slot) : bool{
+        return $slot >= 0 && $slot < $this->getHotbarSize();
     }
 
-    /**
-     * @param Item[] $items
-     */
-    public function setContents(array $items) : void{
-        for($slot = 0, $size = $this->getSize(); $slot < $size; ++$slot){
-            $this->setItem($slot, $items[$slot] ?? VanillaItems::AIR());
+    private function throwIfNotHotbarSlot(int $slot) : void{
+        if(!$this->isHotbarSlot($slot)){
+            throw new \InvalidArgumentException("$slot is not a valid hotbar slot index (expected 0 - " . ($this->getHotbarSize() - 1) . ")");
         }
     }
 
-    public function clearAll() : void{
-        $this->setContents([]);
-    }
-
-    public function clear(int $index) : void{
-        $this->setItem($index, VanillaItems::AIR());
-    }
-
-    /**
-     * Gives the items as picking them up would; what does not fit is given back.
-     *
-     * @return Item[] what did not fit
-     */
-    public function addItem(Item ...$slots) : array{
-        $handle = $this->handle();
-        $left = [];
-        foreach($slots as $item){
-            if($item->isNull()){
-                continue;
-            }
-            if($handle === 0 || !falcon_player_give_item($handle, $item->toFalcon())){
-                $left[] = $item;
-            }
-        }
-        return $left;
-    }
-
-    public function canAddItem(Item $item) : bool{
-        $room = 0;
-        foreach($this->getContents(true) as $slotItem){
-            if($slotItem->isNull()){
-                $room += $item->getMaxStackSize();
-            }elseif($slotItem->canStackWith($item)){
-                $room += max(0, $slotItem->getMaxStackSize() - $slotItem->getCount());
-            }
-        }
-        return $room >= $item->getCount();
-    }
-
-    public function contains(Item $item) : bool{
-        $needed = $item->getCount();
-        foreach($this->getContents() as $slotItem){
-            if($slotItem->equals($item, true, $item->hasNamedTag())){
-                $needed -= $slotItem->getCount();
-                if($needed <= 0){
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    public function first(Item $item, bool $exact = false) : int{
-        foreach($this->getContents() as $slot => $slotItem){
-            if($exact ? $slotItem->equalsExact($item) : $slotItem->equals($item, true, $item->hasNamedTag())){
-                return $slot;
-            }
-        }
-        return -1;
-    }
-
-    public function firstEmpty() : int{
-        foreach($this->getContents(true) as $slot => $item){
-            if($item->isNull()){
-                return $slot;
-            }
-        }
-        return -1;
-    }
-
-    public function isSlotEmpty(int $index) : bool{
-        return $this->getItem($index)->isNull();
+    public function getHotbarSlotItem(int $hotbarSlot) : Item{
+        $this->throwIfNotHotbarSlot($hotbarSlot);
+        return $this->getItem($hotbarSlot);
     }
 
     public function getHeldItemIndex() : int{
@@ -152,20 +64,37 @@ class PlayerInventory{
     }
 
     public function setHeldItemIndex(int $hotbarSlot) : void{
-        if($hotbarSlot < 0 || $hotbarSlot >= $this->getHotbarSize()){
-            throw new \InvalidArgumentException("Hotbar slot index \"$hotbarSlot\" is out of range");
-        }
+        $this->throwIfNotHotbarSlot($hotbarSlot);
+        $old = $this->getHeldItemIndex();
         $handle = $this->handle();
         if($handle !== 0){
             falcon_player_set_selected_slot($handle, $hotbarSlot);
         }
+        foreach($this->heldItemIndexChangeListeners as $callback){
+            $callback($old);
+        }
+    }
+
+    /**
+     * @return ObjectSet<\Closure(int $oldIndex) : void>
+     */
+    public function getHeldItemIndexChangeListeners() : ObjectSet{
+        return $this->heldItemIndexChangeListeners;
     }
 
     public function getItemInHand() : Item{
-        return $this->getItem($this->getHeldItemIndex());
+        return $this->getHotbarSlotItem($this->getHeldItemIndex());
     }
 
     public function setItemInHand(Item $item) : void{
         $this->setItem($this->getHeldItemIndex(), $item);
+    }
+
+    public function getHotbarSize() : int{
+        return 9;
+    }
+
+    public function getHolder() : Human{
+        return $this->holder;
     }
 }

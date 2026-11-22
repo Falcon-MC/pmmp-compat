@@ -80,7 +80,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "11 PocketMine-MP plugins loaded, 9 could not be"
+expect "12 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -156,6 +156,15 @@ expect "fixture: Courier registered its npc as courier:npc"
 expect "fixture: Courier packet round trips, protocol 1.26.30, pool ready"
 expect "fixture: Courier sees Visitor with uuid set and protocol known"
 expect "fixture: Courier sent a form and a packet: sent"
+
+# enchantments, the inventories a player wears and keeps, and a menu window as InvMenu opens one
+expect "fixture: Shopkeeper sword keeps sharpness 3, parser agrees"
+expect "fixture: Shopkeeper chest network id known"
+expect "fixture: Shopkeeper dressed Visitor: Diamond Helmet, 16 arrows, 3 gold in the ender chest"
+expect "fixture: Shopkeeper saw Menu open"
+expect "fixture: Shopkeeper menu opened"
+expect "fixture: Shopkeeper menu holds 2 emeralds before closing"
+expect "fixture: Shopkeeper saw Menu close"
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

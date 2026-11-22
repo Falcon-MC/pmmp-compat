@@ -19,6 +19,16 @@ use pocketmine\event\player\PlayerToggleFlightEvent;
 use pocketmine\event\player\PlayerToggleSneakEvent;
 use pocketmine\event\player\PlayerToggleSprintEvent;
 use pocketmine\event\server\CommandEvent;
+use pocketmine\event\inventory\InventoryCloseEvent;
+use pocketmine\event\inventory\InventoryOpenEvent;
+use pocketmine\event\inventory\InventoryTransactionEvent;
+use pocketmine\inventory\Inventory;
+use pocketmine\inventory\transaction\action\DestroyItemAction;
+use pocketmine\inventory\transaction\action\DropItemAction;
+use pocketmine\inventory\transaction\action\SlotChangeAction;
+use pocketmine\inventory\transaction\InventoryTransaction;
+use pocketmine\item\VanillaItems;
+use pmmpcompat\inventory\FalconBlockInventory;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\protocol\ServerboundPacket;
@@ -86,9 +96,12 @@ final class Bridge{
     private const DATA_PACKET_RECEIVE = 14;
     private const DATA_PACKET_SEND = 15;
     private const PLAYER_FORM_RESPONSE = 69;
+    private const INVENTORY_OPEN = 17;
+    private const INVENTORY_CLOSE = 18;
+    private const INVENTORY_TRANSACTION = 19;
 
     /** what the runtime always listens to: it keeps its players and forms with them */
-    private const ALWAYS = [self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_FORM_RESPONSE];
+    private const ALWAYS = [self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_FORM_RESPONSE, self::INVENTORY_TRANSACTION];
 
     /** the PocketMine-MP events each Falcon event becomes; Falcon passes it once a listener wants one of them */
     private const SOURCES = [
@@ -116,6 +129,9 @@ final class Bridge{
         self::ENTITY_TELEPORT => [EntityTeleportEvent::class],
         self::DATA_PACKET_RECEIVE => [DataPacketReceiveEvent::class],
         self::DATA_PACKET_SEND => [DataPacketSendEvent::class],
+        // a container block's window: both ends, the current window follows them
+        self::INVENTORY_OPEN => [InventoryOpenEvent::class, InventoryCloseEvent::class],
+        self::INVENTORY_CLOSE => [InventoryOpenEvent::class, InventoryCloseEvent::class],
     ];
 
     /** @var array<int, true> the Falcon events passed here so far */
@@ -158,9 +174,22 @@ final class Bridge{
         }
     }
 
+    /** @internal a plugin window closed, whoever closed it */
+    public static function windowClosed(int $playerHandle, int $windowId) : void{
+        try{
+            Players::get($playerHandle)->getNetworkSession()->getInvManager()?->onClosedByFalcon($windowId);
+        }catch(\Throwable $e){
+            Log::critical('Could not close a window: ' . $e->getMessage());
+            Log::exception($e);
+        }
+    }
+
     /** @internal each of Falcon's ticks */
     public static function tick() : void{
         try{
+            foreach(Players::online() as $player){
+                $player->getNetworkSession()->getInvManager()?->takeMoves();
+            }
             Server::getInstance()->tick();
         }catch(\Throwable $e){
             Log::critical('A tick of the PocketMine-MP plugins failed: ' . $e->getMessage());
@@ -364,6 +393,21 @@ final class Bridge{
                 return $packet instanceof ClientboundPacket
                     ? self::state(new DataPacketSendEvent([$player->getNetworkSession()], [$packet]), $message, $handle)
                         + ['packets' => [$packet]] : null;
+            case self::INVENTORY_OPEN:
+                if($player === null){
+                    return null;
+                }
+                $position = self::eventBlock($handle, $player)->getPosition();
+                $inventory = FalconBlockInventory::at($position);
+                return self::state(new InventoryOpenEvent($inventory, $player), $message, $handle) + ['inventory' => $inventory];
+            case self::INVENTORY_CLOSE:
+                // the window of a container block closed: the player's current window goes, InventoryCloseEvent with it
+                if($player !== null && $player->getCurrentWindow() instanceof FalconBlockInventory){
+                    $player->removeCurrentWindow();
+                }
+                return null;
+            case self::INVENTORY_TRANSACTION:
+                return $player === null ? null : self::createTransaction($handle, $player, $message);
             case self::SIGN_CHANGE:
                 if($player === null){
                     return null;
@@ -376,6 +420,61 @@ final class Bridge{
                 return self::state(new SignChangeEvent($sign, $player, $text, falcon_event_state($handle)), $message, $handle);
         }
         return null;
+    }
+
+    /**
+     * One move of an item stack request, as PocketMine-MP's transaction of slot changes; Falcon asks before it
+     * applies the request, so cancelling refuses the whole of it.
+     */
+    private static function createTransaction(int $handle, Player $player, string $message) : ?array{
+        [$action, $source, $sourceSlot, $destination, $destinationSlot, $count] = falcon_event_transaction($handle);
+        $manager = $player->getNetworkSession()->getInvManager();
+        if($manager !== null && $manager->getCurrentWindowId() !== 0 && ($source === "container" || $destination === "container")){
+            $manager->onMoved();
+        }
+        if(!InventoryTransactionEvent::hasHandlers()){
+            return null;
+        }
+        $data = falcon_event_item($handle);
+        $item = $data !== null ? Item::fromFalcon($data) : VanillaItems::AIR();
+        $moved = (clone $item)->setCount(max(0, min($count, $item->getCount())));
+        $left = (clone $item)->setCount($item->getCount() - $moved->getCount());
+
+        $actions = [];
+        $from = self::inventoryOf($player, $source);
+        if($from !== null && $sourceSlot >= 0){
+            $actions[] = new SlotChangeAction($from, $sourceSlot, $item, $action === "swap"
+                ? (self::inventoryOf($player, $destination)?->getItem($destinationSlot) ?? VanillaItems::AIR()) : $left);
+        }
+        if($action === "drop"){
+            $actions[] = new DropItemAction($moved);
+        }elseif($action === "destroy"){
+            $actions[] = new DestroyItemAction($moved);
+        }elseif($destination !== ""){
+            $to = self::inventoryOf($player, $destination);
+            if($to !== null && $destinationSlot >= 0){
+                $before = $to->getItem($destinationSlot);
+                $after = $action === "swap" ? $item : ($before->canStackWith($moved)
+                    ? (clone $before)->setCount($before->getCount() + $moved->getCount()) : $moved);
+                $actions[] = new SlotChangeAction($to, $destinationSlot, $before, $after);
+            }
+        }
+        if(count($actions) === 0){
+            return null;
+        }
+        return self::state(new InventoryTransactionEvent(new InventoryTransaction($player, $actions)), $message, $handle);
+    }
+
+    /** the PocketMine-MP inventory a Falcon container name stands for */
+    private static function inventoryOf(Player $player, string $container) : ?Inventory{
+        return match($container){
+            "hotbar", "inventory", "hotbar_and_inventory" => $player->getInventory(),
+            "armor" => $player->getArmorInventory(),
+            "offhand" => $player->getOffHandInventory(),
+            "cursor" => $player->getCursorInventory(),
+            "container" => $player->getCurrentWindow(),
+            default => null,
+        };
     }
 
     private static function eventEntity(int $handle) : ?\pocketmine\entity\Entity{
@@ -496,6 +595,8 @@ final class Bridge{
             }finally{
                 self::$resending = false;
             }
+        }elseif($event instanceof InventoryOpenEvent && $last && !$event->isCancelled() && isset($state['inventory'])){
+            $event->getPlayer()->onWindowOpenedByFalcon($state['inventory']);
         }elseif($event instanceof SignChangeEvent){
             self::applyMessage($handle, $state, implode("\n", $event->getNewText()->getLines()));
         }elseif($event instanceof PlayerChatEvent){

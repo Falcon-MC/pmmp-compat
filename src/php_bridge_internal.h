@@ -19,5 +19,8 @@ extern FalconPlugin *falcon_plugin;
 #define HANDLE(type, value) ((type *) (uintptr_t) (value))
 #define TO_LONG(pointer) ((zend_long) (uintptr_t) (pointer))
 
+// a static method of the runtime's Bridge class, guarded as falcon_guard guards a callback; false when it stopped
+bool call_bridge(const char *method, uint32_t count, zval *arguments, zval *result);
+
 // the world, block, item and entity functions, registered with the falcon module
 extern const zend_function_entry falcon_world_functions[];

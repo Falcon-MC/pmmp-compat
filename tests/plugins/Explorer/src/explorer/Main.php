@@ -87,7 +87,7 @@ final class Main extends PluginBase implements Listener{
             $this->getLogger()->info("fixture: Explorer saw " . $entity->getName() . " take " . $event->getBaseDamage() . " damage, cause " . $event->getCause());
             $event->setBaseDamage(1.0);
             $this->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($entity) : void{
-                $this->getLogger()->info("fixture: Explorer sees " . $entity->getName() . " at " . $entity->getHealth() . " health");
+                $this->getLogger()->info("fixture: Explorer sees " . $entity->getName() . " at " . round($entity->getHealth()) . " health");
             }), 1);
         }
     }

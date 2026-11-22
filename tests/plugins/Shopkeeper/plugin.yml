@@ -1,0 +1,4 @@
+name: Shopkeeper
+version: 1.0.0
+main: shopkeeper\Main
+api: 5.0.0

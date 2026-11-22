@@ -8,7 +8,14 @@ use pocketmine\command\CommandSender;
 use pocketmine\entity\Human;
 use pocketmine\form\Form;
 use pocketmine\form\FormValidationException;
+use pocketmine\event\inventory\InventoryCloseEvent;
+use pocketmine\event\inventory\InventoryOpenEvent;
+use pocketmine\inventory\ArmorInventory;
+use pocketmine\inventory\Inventory;
+use pocketmine\inventory\PlayerCursorInventory;
+use pocketmine\inventory\PlayerEnderInventory;
 use pocketmine\inventory\PlayerInventory;
+use pocketmine\inventory\PlayerOffHandInventory;
 use pocketmine\network\mcpe\NetworkSession;
 use Ramsey\Uuid\Uuid;
 use Ramsey\Uuid\UuidInterface;
@@ -42,6 +49,11 @@ class Player extends Human implements CommandSender{
     /** what the next leave message is to be, when a kick names one */
     private Translatable|string|null $quitMessage = null;
     private PlayerInventory $inventory;
+    private ArmorInventory $armorInventory;
+    private PlayerOffHandInventory $offHandInventory;
+    private PlayerEnderInventory $enderInventory;
+    private PlayerCursorInventory $cursorInventory;
+    private ?Inventory $currentWindow = null;
     private NetworkSession $networkSession;
     /** @var Form[] by Falcon's form id */
     private array $forms = [];
@@ -53,6 +65,10 @@ class Player extends Human implements CommandSender{
     ){
         parent::__construct(falcon_entity_runtime_id(falcon_player_entity($handle)));
         $this->inventory = new PlayerInventory($this);
+        $this->armorInventory = new ArmorInventory($this);
+        $this->offHandInventory = new PlayerOffHandInventory($this);
+        $this->enderInventory = new PlayerEnderInventory($this);
+        $this->cursorInventory = new PlayerCursorInventory($this);
         $this->networkSession = new NetworkSession($this);
         $this->username = falcon_player_name($handle);
         $this->displayName = $this->username;
@@ -63,6 +79,10 @@ class Player extends Human implements CommandSender{
 
     /** @internal the player left: nothing reaches Falcon's player from now on */
     public function onLeave() : void{
+        if($this->currentWindow !== null){
+            $this->currentWindow->onClose($this);
+            $this->currentWindow = null;
+        }
         $this->online = false;
     }
 
@@ -78,6 +98,65 @@ class Player extends Human implements CommandSender{
 
     public function getInventory() : PlayerInventory{
         return $this->inventory;
+    }
+
+    public function getArmorInventory() : ArmorInventory{
+        return $this->armorInventory;
+    }
+
+    public function getOffHandInventory() : PlayerOffHandInventory{
+        return $this->offHandInventory;
+    }
+
+    public function getEnderInventory() : PlayerEnderInventory{
+        return $this->enderInventory;
+    }
+
+    public function getCursorInventory() : PlayerCursorInventory{
+        return $this->cursorInventory;
+    }
+
+    public function getCurrentWindow() : ?Inventory{
+        return $this->currentWindow;
+    }
+
+    /** opens the inventory as a window; false when an InventoryOpenEvent listener refused it */
+    public function setCurrentWindow(Inventory $inventory) : bool{
+        if($inventory === $this->currentWindow){
+            return true;
+        }
+        $event = new InventoryOpenEvent($inventory, $this);
+        $event->call();
+        if($event->isCancelled()){
+            return false;
+        }
+        $this->removeCurrentWindow();
+        if(!$this->online){
+            throw new \InvalidArgumentException("Player cannot open inventories in this state");
+        }
+        $this->networkSession->getInvManager()->onCurrentWindowChange($inventory);
+        $inventory->onOpen($this);
+        $this->currentWindow = $inventory;
+        return true;
+    }
+
+    /**
+     * @internal a window Falcon opened, a container block the player used: it is open already
+     */
+    public function onWindowOpenedByFalcon(Inventory $inventory) : void{
+        $this->currentWindow = $inventory;
+        $inventory->onOpen($this);
+    }
+
+    public function removeCurrentWindow() : void{
+        if($this->currentWindow === null){
+            return;
+        }
+        $window = $this->currentWindow;
+        $window->onClose($this);
+        $this->networkSession->getInvManager()->onCurrentWindowRemove();
+        $this->currentWindow = null;
+        (new InventoryCloseEvent($window, $this))->call();
     }
 
     public function getNetworkSession() : NetworkSession{
@@ -185,6 +264,12 @@ class Player extends Human implements CommandSender{
     public function isAdventure(bool $literal = false) : bool{
         $mode = $this->getGamemode();
         return $mode === GameMode::ADVENTURE || (!$literal && $mode === GameMode::SPECTATOR);
+    }
+
+    /** survival and adventure players run out of items; creative and spectator ones do not */
+    public function hasFiniteResources() : bool{
+        $mode = $this->getGamemode();
+        return $mode === GameMode::SURVIVAL || $mode === GameMode::ADVENTURE;
     }
 
     public function isSpectator() : bool{

@@ -15,9 +15,16 @@ use pocketmine\player\Player;
  * Packets go out through Falcon, which writes their header and batches them; see Packets for the game version.
  */
 class NetworkSession{
+    private InventoryManager $invManager;
+
     public function __construct(
         private Player $player
     ){
+        $this->invManager = new InventoryManager($player);
+    }
+
+    public function getInvManager() : ?InventoryManager{
+        return $this->player->isOnline() ? $this->invManager : null;
     }
 
     public function getPlayer() : ?Player{

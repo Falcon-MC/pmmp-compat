@@ -16,6 +16,9 @@ use pocketmine\world\World;
  * getStateId() are numbers made from them, the same from one run to the next.
  */
 class Block{
+    /** @var array<int, array{string, string}> the state ids given out, for the network ids plugins ask for */
+    private static array $statesById = [];
+
     protected Position $position;
     /** @var array<string, bool|int|string> */
     private array $states;
@@ -82,7 +85,17 @@ class Block{
     }
 
     public function getStateId() : int{
-        return crc32($this->identifier . $this->getFalconStates());
+        $id = crc32($this->identifier . $this->getFalconStates());
+        self::$statesById[$id] ??= [$this->identifier, $this->getFalconStates()];
+        return $id;
+    }
+
+    /**
+     * @internal the identifier and JSON states of a state id this runtime gave out
+     * @return array{string, string}|null
+     */
+    public static function stateOf(int $stateId) : ?array{
+        return self::$statesById[$stateId] ?? null;
     }
 
     public function isSameType(Block $other) : bool{

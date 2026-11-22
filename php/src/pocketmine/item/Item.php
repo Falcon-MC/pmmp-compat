@@ -6,6 +6,9 @@ namespace pocketmine\item;
 
 use pocketmine\block\Block;
 use pocketmine\block\VanillaBlocks;
+use pocketmine\data\bedrock\EnchantmentIdMap;
+use pocketmine\item\enchantment\Enchantment;
+use pocketmine\item\enchantment\EnchantmentInstance;
 use pocketmine\nbt\LittleEndianNbtSerializer;
 use pocketmine\nbt\NbtDataException;
 use pocketmine\nbt\tag\CompoundTag;
@@ -23,6 +26,7 @@ class Item implements \JsonSerializable{
     public const TAG_DISPLAY = "display";
     public const TAG_DISPLAY_NAME = "Name";
     public const TAG_DISPLAY_LORE = "Lore";
+    public const TAG_ENCH = "ench";
 
     protected int $count = 1;
     protected string $customName = "";
@@ -30,6 +34,8 @@ class Item implements \JsonSerializable{
     protected array $lore = [];
     protected int $damage = 0;
     protected CompoundTag $nbt;
+    /** @var EnchantmentInstance[] by enchantment object id */
+    protected array $enchantments = [];
 
     public function __construct(
         private string $identifier,
@@ -207,6 +213,16 @@ class Item implements \JsonSerializable{
         }else{
             $tag->removeTag(self::TAG_DISPLAY);
         }
+        $enchantments = [];
+        foreach($this->enchantments as $instance){
+            $id = EnchantmentIdMap::getInstance()->toId($instance->getType());
+            $enchantments[] = CompoundTag::create()->setShort("id", $id)->setShort("lvl", $instance->getLevel());
+        }
+        if(count($enchantments) > 0){
+            $tag->setTag(self::TAG_ENCH, new ListTag($enchantments));
+        }else{
+            $tag->removeTag(self::TAG_ENCH);
+        }
         return $tag;
     }
 
@@ -215,6 +231,19 @@ class Item implements \JsonSerializable{
         $this->nbt = clone $tag;
         $display = $tag->getCompoundTag(self::TAG_DISPLAY);
         $this->customName = $display?->getString(self::TAG_DISPLAY_NAME, "") ?? "";
+        $this->enchantments = [];
+        $enchantments = $tag->getListTag(self::TAG_ENCH);
+        if($enchantments !== null){
+            foreach($enchantments as $entry){
+                if(!$entry instanceof CompoundTag){
+                    continue;
+                }
+                $type = EnchantmentIdMap::getInstance()->fromId($entry->getShort("id", -1));
+                if($type !== null){
+                    $this->enchantments[spl_object_id($type)] = new EnchantmentInstance($type, $entry->getShort("lvl", 1));
+                }
+            }
+        }
         $this->lore = [];
         $lore = $display?->getListTag(self::TAG_DISPLAY_LORE);
         if($lore !== null){
@@ -232,6 +261,52 @@ class Item implements \JsonSerializable{
         $this->nbt = new CompoundTag();
         $this->customName = "";
         $this->lore = [];
+        $this->enchantments = [];
+        return $this;
+    }
+
+    public function hasEnchantments() : bool{
+        return count($this->enchantments) > 0;
+    }
+
+    public function hasEnchantment(Enchantment $enchantment, int $level = -1) : bool{
+        $instance = $this->enchantments[spl_object_id($enchantment)] ?? null;
+        return $instance !== null && ($level < 0 || $instance->getLevel() === $level);
+    }
+
+    public function getEnchantment(Enchantment $enchantment) : ?EnchantmentInstance{
+        return $this->enchantments[spl_object_id($enchantment)] ?? null;
+    }
+
+    public function getEnchantmentLevel(Enchantment $enchantment) : int{
+        return ($this->enchantments[spl_object_id($enchantment)] ?? null)?->getLevel() ?? 0;
+    }
+
+    /**
+     * @return EnchantmentInstance[]
+     */
+    public function getEnchantments() : array{
+        return $this->enchantments;
+    }
+
+    /** @return $this */
+    public function addEnchantment(EnchantmentInstance $enchantment) : Item{
+        $this->enchantments[spl_object_id($enchantment->getType())] = $enchantment;
+        return $this;
+    }
+
+    /** @return $this */
+    public function removeEnchantment(Enchantment $enchantment, int $level = -1) : Item{
+        $instance = $this->enchantments[spl_object_id($enchantment)] ?? null;
+        if($instance !== null && ($level < 0 || $instance->getLevel() === $level)){
+            unset($this->enchantments[spl_object_id($enchantment)]);
+        }
+        return $this;
+    }
+
+    /** @return $this */
+    public function removeEnchantments() : Item{
+        $this->enchantments = [];
         return $this;
     }
 

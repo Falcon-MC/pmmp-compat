@@ -10,7 +10,8 @@ include(FetchContent)
 FetchContent_Declare(
     falcon_plugin_api
     GIT_REPOSITORY https://github.com/Falcon-MC/PluginAPI.git
-    GIT_TAG main
+    # until Falcon-MC/PluginAPI#29 is merged: plugin windows and block network ids
+    GIT_TAG feat/plugin-windows
     GIT_SHALLOW TRUE
 )
 set(FALCON_PLUGIN_API_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)

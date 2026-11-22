@@ -577,6 +577,216 @@ PHP_FUNCTION(falcon_player_protocol) {
     RETURN_LONG((zend_long) falcon->playerProtocolVersion(HANDLE(FalconPlayer, player)));
 }
 
+// --- inventories: armour, off hand, Ender chest, block containers and plugin windows ---
+
+#define SLOT_ARGUMENTS(owner, slot) \
+    zend_long owner, slot; \
+    ZEND_PARSE_PARAMETERS_START(2, 2) \
+        Z_PARAM_LONG(owner) \
+        Z_PARAM_LONG(slot) \
+    ZEND_PARSE_PARAMETERS_END()
+
+#define SLOT_ITEM_ARGUMENTS(owner, slot, item) \
+    zend_long owner, slot; \
+    HashTable *item; \
+    ZEND_PARSE_PARAMETERS_START(3, 3) \
+        Z_PARAM_LONG(owner) \
+        Z_PARAM_LONG(slot) \
+        Z_PARAM_ARRAY_HT(item) \
+    ZEND_PARSE_PARAMETERS_END()
+
+PHP_FUNCTION(falcon_player_armor_item) {
+    SLOT_ARGUMENTS(player, slot);
+    return_owned_item(return_value, falcon->playerArmorItem(HANDLE(FalconPlayer, player), (FalconArmorSlot) slot));
+}
+
+PHP_FUNCTION(falcon_player_set_armor_item) {
+    SLOT_ITEM_ARGUMENTS(player, slot, item);
+    FalconItem *created = item_from_array(item);
+    if (created == NULL)
+        RETURN_FALSE;
+    falcon->playerSetArmorItem(HANDLE(FalconPlayer, player), (FalconArmorSlot) slot, created);
+    falcon->itemDestroy(created);
+    RETURN_TRUE;
+}
+
+PHP_FUNCTION(falcon_player_offhand_item) {
+    ARGUMENTS_1(player);
+    return_owned_item(return_value, falcon->playerOffhandItem(HANDLE(FalconPlayer, player)));
+}
+
+PHP_FUNCTION(falcon_player_set_offhand_item) {
+    zend_long player;
+    HashTable *item;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(player)
+        Z_PARAM_ARRAY_HT(item)
+    ZEND_PARSE_PARAMETERS_END();
+    FalconItem *created = item_from_array(item);
+    if (created == NULL)
+        RETURN_FALSE;
+    falcon->playerSetOffhandItem(HANDLE(FalconPlayer, player), created);
+    falcon->itemDestroy(created);
+    RETURN_TRUE;
+}
+
+PHP_FUNCTION(falcon_player_ender_size) {
+    ARGUMENTS_1(player);
+    RETURN_LONG((zend_long) falcon->playerEnderChestSize(HANDLE(FalconPlayer, player)));
+}
+
+PHP_FUNCTION(falcon_player_ender_item) {
+    SLOT_ARGUMENTS(player, slot);
+    return_owned_item(return_value, falcon->playerEnderChestItem(HANDLE(FalconPlayer, player), (uint32_t) slot));
+}
+
+PHP_FUNCTION(falcon_player_set_ender_item) {
+    SLOT_ITEM_ARGUMENTS(player, slot, item);
+    FalconItem *created = item_from_array(item);
+    if (created == NULL)
+        RETURN_FALSE;
+    const int set = falcon->playerSetEnderChestItem(HANDLE(FalconPlayer, player), (uint32_t) slot, created);
+    falcon->itemDestroy(created);
+    RETURN_BOOL(set != 0);
+}
+
+PHP_FUNCTION(falcon_level_container_size) {
+    POSITION_ARGUMENTS(level, x, y, z);
+    RETURN_LONG((zend_long) falcon->levelContainerSize(HANDLE(FalconLevel, level), BLOCK_POS(x, y, z)));
+}
+
+PHP_FUNCTION(falcon_level_container_item) {
+    zend_long level, x, y, z, slot;
+    ZEND_PARSE_PARAMETERS_START(5, 5)
+        Z_PARAM_LONG(level)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(z)
+        Z_PARAM_LONG(slot)
+    ZEND_PARSE_PARAMETERS_END();
+    return_owned_item(return_value, falcon->levelContainerItem(HANDLE(FalconLevel, level), BLOCK_POS(x, y, z),
+                                                               (uint32_t) slot));
+}
+
+PHP_FUNCTION(falcon_level_set_container_item) {
+    zend_long level, x, y, z, slot;
+    HashTable *item;
+    ZEND_PARSE_PARAMETERS_START(6, 6)
+        Z_PARAM_LONG(level)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(z)
+        Z_PARAM_LONG(slot)
+        Z_PARAM_ARRAY_HT(item)
+    ZEND_PARSE_PARAMETERS_END();
+    FalconItem *created = item_from_array(item);
+    if (created == NULL)
+        RETURN_FALSE;
+    const int set = falcon->levelSetContainerItem(HANDLE(FalconLevel, level), BLOCK_POS(x, y, z), (uint32_t) slot, created);
+    falcon->itemDestroy(created);
+    RETURN_BOOL(set != 0);
+}
+
+// [action, source container, source slot, destination container, destination slot, count]
+PHP_FUNCTION(falcon_event_transaction) {
+    ARGUMENTS_1(event);
+    FalconEvent *target = HANDLE(FalconEvent, event);
+    array_init_size(return_value, 6);
+    const char *action = falcon->eventCause(target);
+    add_next_index_string(return_value, action != NULL ? action : "");
+    const char *source = falcon->eventSourceContainer(target);
+    add_next_index_string(return_value, source != NULL ? source : "");
+    add_next_index_long(return_value, (zend_long) falcon->eventSourceSlot(target));
+    const char *destination = falcon->eventDestinationContainer(target);
+    add_next_index_string(return_value, destination != NULL ? destination : "");
+    add_next_index_long(return_value, (zend_long) falcon->eventDestinationSlot(target));
+    add_next_index_long(return_value, (zend_long) falcon->eventAmount(target));
+}
+
+// a plugin window closed: the Bridge tells the PHP inventory, whoever closed it
+static void window_closed(FalconPlayer *player, uint32_t window, void *userData) {
+    (void) userData;
+    zval call[2];
+    ZVAL_LONG(&call[0], TO_LONG(player));
+    ZVAL_LONG(&call[1], (zend_long) window);
+    zval result;
+    call_bridge("pmmpcompat\\Bridge::windowClosed", 2, call, &result);
+    zval_ptr_dtor(&result);
+}
+
+// the window id, 0 when another is open or on a Falcon without plugin windows
+PHP_FUNCTION(falcon_player_open_window) {
+    zend_long player, type, x, y, z, actor, size;
+    ZEND_PARSE_PARAMETERS_START(7, 7)
+        Z_PARAM_LONG(player)
+        Z_PARAM_LONG(type)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(z)
+        Z_PARAM_LONG(actor)
+        Z_PARAM_LONG(size)
+    ZEND_PARSE_PARAMETERS_END();
+    if (!FALCON_HAS(playerOpenWindow))
+        RETURN_LONG(0);
+    const FalconWindowDescriptor descriptor = {(uint32_t) type, BLOCK_POS(x, y, z), (int64_t) actor, (uint32_t) size,
+                                               window_closed, NULL};
+    RETURN_LONG((zend_long) falcon->playerOpenWindow(falcon_plugin, HANDLE(FalconPlayer, player), &descriptor));
+}
+
+PHP_FUNCTION(falcon_player_window_item) {
+    zend_long player, window, slot;
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_LONG(player)
+        Z_PARAM_LONG(window)
+        Z_PARAM_LONG(slot)
+    ZEND_PARSE_PARAMETERS_END();
+    if (!FALCON_HAS(playerWindowItem))
+        RETURN_NULL();
+    return_owned_item(return_value, falcon->playerWindowItem(HANDLE(FalconPlayer, player), (uint32_t) window,
+                                                             (uint32_t) slot));
+}
+
+PHP_FUNCTION(falcon_player_set_window_item) {
+    zend_long player, window, slot;
+    HashTable *item;
+    ZEND_PARSE_PARAMETERS_START(4, 4)
+        Z_PARAM_LONG(player)
+        Z_PARAM_LONG(window)
+        Z_PARAM_LONG(slot)
+        Z_PARAM_ARRAY_HT(item)
+    ZEND_PARSE_PARAMETERS_END();
+    if (!FALCON_HAS(playerSetWindowItem))
+        RETURN_FALSE;
+    FalconItem *created = item_from_array(item);
+    if (created == NULL)
+        RETURN_FALSE;
+    const int set = falcon->playerSetWindowItem(HANDLE(FalconPlayer, player), (uint32_t) window, (uint32_t) slot, created);
+    falcon->itemDestroy(created);
+    RETURN_BOOL(set != 0);
+}
+
+PHP_FUNCTION(falcon_player_close_window) {
+    zend_long player, window;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(player)
+        Z_PARAM_LONG(window)
+    ZEND_PARSE_PARAMETERS_END();
+    if (FALCON_HAS(playerCloseWindow))
+        falcon->playerCloseWindow(HANDLE(FalconPlayer, player), (uint32_t) window);
+}
+
+PHP_FUNCTION(falcon_block_network_id) {
+    zend_string *name;
+    zend_string *states;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(name)
+        Z_PARAM_STR(states)
+    ZEND_PARSE_PARAMETERS_END();
+    if (!FALCON_HAS(serverBlockNetworkId))
+        RETURN_LONG(0);
+    RETURN_LONG((zend_long) falcon->serverBlockNetworkId(ZSTR_VAL(name), ZSTR_VAL(states)));
+}
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_any, 0, 0, 0)
     ZEND_ARG_VARIADIC_INFO(0, arguments)
 ZEND_END_ARG_INFO()
@@ -636,5 +846,21 @@ const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_player_uuid)
     ENTRY(falcon_player_address)
     ENTRY(falcon_player_protocol)
+    ENTRY(falcon_player_armor_item)
+    ENTRY(falcon_player_set_armor_item)
+    ENTRY(falcon_player_offhand_item)
+    ENTRY(falcon_player_set_offhand_item)
+    ENTRY(falcon_player_ender_size)
+    ENTRY(falcon_player_ender_item)
+    ENTRY(falcon_player_set_ender_item)
+    ENTRY(falcon_level_container_size)
+    ENTRY(falcon_level_container_item)
+    ENTRY(falcon_level_set_container_item)
+    ENTRY(falcon_event_transaction)
+    ENTRY(falcon_player_open_window)
+    ENTRY(falcon_player_window_item)
+    ENTRY(falcon_player_set_window_item)
+    ENTRY(falcon_player_close_window)
+    ENTRY(falcon_block_network_id)
     PHP_FE_END
 };

@@ -105,7 +105,7 @@ static void guard_restore(const struct guard_state *state) {
 }
 
 // calls a static method of the runtime's Bridge class from Falcon's side, as falcon_guard protects a callback
-static bool call_bridge(const char *method, uint32_t count, zval *arguments, zval *result) {
+bool call_bridge(const char *method, uint32_t count, zval *arguments, zval *result) {
     ZVAL_UNDEF(result);
     if (!php_running)
         return false;
