@@ -1,0 +1,7 @@
+name: Alpha
+version: 2.1
+main: alpha\plugin\Main
+src-namespace-prefix: alpha\plugin
+api: [5.36.0]
+depend: [Beta]
+softdepend: [NotInstalled]

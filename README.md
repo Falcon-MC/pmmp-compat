@@ -48,12 +48,14 @@ Plugins keep their own license. Only the code in this repository is under the li
 
 ## Status
 
-Early development: nothing runs yet. The API is covered in the order the most used plugins need it. That
-order is measured on the most downloaded plugins of [Poggit](https://poggit.pmmp.io), not guessed.
+Early development: plugins load, but most of the API they call is not there yet. The API is covered in the
+order the most used plugins need it. That order is measured on the most downloaded plugins of
+[Poggit](https://poggit.pmmp.io), not guessed.
 
 | Area | State |
 |---|---|
-| `plugin.yml` loading and plugin lifecycle | Planned |
+| `plugin.yml`, `.phar` and source plugins, class loading, load order | Done |
+| Plugin lifecycle (`onLoad`, `onEnable`, `onDisable`) | In progress |
 | Events | Planned |
 | Commands and permissions | Planned |
 | Scheduler and async tasks | Planned |
@@ -109,6 +111,8 @@ cmake --build build
 Falcon PocketMine Compatibility is licensed under the [GNU Lesser General Public License v3.0](LICENSE), which
 supplements the [GNU General Public License v3.0](COPYING), the same license as PocketMine-MP. You may use,
 modify and redistribute it, as long as changes to it stay under the same license.
+
+It bundles [symfony/yaml](https://github.com/symfony/yaml) under the MIT license, in `php/vendor/`.
 
 It is not affiliated with or approved by PocketMine-MP, Mojang or Microsoft. All brands and trademarks belong
 to their respective owners.

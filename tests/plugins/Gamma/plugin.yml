@@ -1,0 +1,8 @@
+name: Gamma
+version: "0.3"
+main: gamma\Main
+api: ["4.0.0", "5.3.0"]
+loadbefore: [Alpha]
+extensions:
+  Core: ">=8.1"
+  zlib: "*"

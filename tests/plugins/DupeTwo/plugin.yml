@@ -1,0 +1,4 @@
+name: Dupe
+version: 2.0.0
+main: dupetwo\Main
+api: 5.0.0

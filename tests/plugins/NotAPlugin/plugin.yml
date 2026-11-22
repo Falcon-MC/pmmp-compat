@@ -1,0 +1,4 @@
+name: NotAPlugin
+version: 1.0.0
+main: notaplugin\Main
+api: 5.0.0

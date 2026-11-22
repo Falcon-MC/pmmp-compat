@@ -1,0 +1,68 @@
+<?php
+
+declare(strict_types=1);
+
+namespace pmmpcompat;
+
+use pmmpcompat\plugin\FolderPluginLoader;
+use pocketmine\plugin\PharPluginLoader;
+use pocketmine\plugin\PluginEnableOrder;
+use pocketmine\plugin\PluginManager;
+
+/** Starts and stops the PocketMine-MP plugins inside Falcon. */
+final class Runtime{
+    /** The PocketMine-MP API this runtime answers to in plugin.yml's api */
+    public const API_VERSION = '5.44.3';
+
+    private static ?PluginManager $plugins = null;
+
+    private function __construct(){
+    }
+
+    /**
+     * @param string $runtimeFolder this runtime's PHP files
+     * @param string $pluginFolder the folder holding plugins/ and plugin_data/
+     */
+    public static function start(string $runtimeFolder, string $pluginFolder) : void{
+        if(self::$plugins !== null){
+            throw new \LogicException('the runtime is already started');
+        }
+        $classes = new ClassLoader();
+        $classes->addPath('pocketmine', $runtimeFolder . '/src/pocketmine');
+        $classes->addPath('pmmpcompat', $runtimeFolder . '/src/pmmpcompat');
+        $classes->addPath('Symfony\\Component\\Yaml', $runtimeFolder . '/vendor/symfony/yaml');
+        $classes->register();
+        require_once $runtimeFolder . '/vendor/symfony/deprecation-contracts/function.php';
+
+        $pluginsPath = $pluginFolder . '/plugins';
+        $dataPath = $pluginFolder . '/plugin_data';
+        foreach([$pluginsPath, $dataPath] as $path){
+            if(!is_dir($path)){
+                mkdir($path, 0777, true);
+            }
+        }
+
+        $manager = new PluginManager(self::API_VERSION, $dataPath);
+        $manager->registerInterface(new PharPluginLoader($classes));
+        $manager->registerInterface(new FolderPluginLoader($classes));
+        self::$plugins = $manager;
+
+        $errors = 0;
+        $manager->loadPlugins($pluginsPath, $errors);
+        // the server is up by the time Falcon enables this plugin: both orders run now, startup first
+        $manager->enablePlugins(PluginEnableOrder::STARTUP);
+        $manager->enablePlugins(PluginEnableOrder::POSTWORLD);
+        $count = count($manager->getPlugins());
+        Log::info($count . ' PocketMine-MP plugin' . ($count === 1 ? '' : 's') . ' loaded'
+            . ($errors > 0 ? ', ' . $errors . ' could not be' : ''));
+    }
+
+    public static function stop() : void{
+        self::$plugins?->disablePlugins();
+        self::$plugins = null;
+    }
+
+    public static function plugins() : ?PluginManager{
+        return self::$plugins;
+    }
+}

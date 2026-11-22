@@ -15,8 +15,8 @@ enum pmmp_log_level {
 // where PHP's output, its errors and falcon_log() go
 typedef void (*pmmp_log_sink)(enum pmmp_log_level level, const char *text, size_t length);
 
-// starts the interpreter on the calling thread; 0 on success
-int pmmp_php_start(pmmp_log_sink sink);
+// starts the interpreter on the calling thread; folder is what falcon_plugin_folder() returns. 0 on success
+int pmmp_php_start(pmmp_log_sink sink, const char *folder);
 
 // runs a script file; 0 when it ran to its end, 1 when a fatal error stopped it
 int pmmp_php_run_file(const char *path);

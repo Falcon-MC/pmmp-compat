@@ -1,0 +1,4 @@
+name: Quitter
+version: 1.0.0
+main: quitter\Main
+api: 5.0.0

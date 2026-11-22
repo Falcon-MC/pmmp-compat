@@ -1,0 +1,5 @@
+name: NeedsMongo
+version: 1.0.0
+main: needsmongo\Main
+api: 5.0.0
+extensions: [mongodb]

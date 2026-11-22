@@ -1,0 +1,5 @@
+name: CycleA
+version: 1.0.0
+main: cyclea\Main
+api: 5.0.0
+depend: [CycleB]

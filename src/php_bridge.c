@@ -5,9 +5,11 @@
 #include <zend_exceptions.h>
 #include <zend_stream.h>
 
+#include <stdlib.h>
 #include <string.h>
 
 static pmmp_log_sink log_sink = NULL;
+static char *plugin_folder = NULL;
 
 static void emit(enum pmmp_log_level level, const char *text, size_t length) {
     // a line at a time: the logger adds its own line ends
@@ -19,18 +21,35 @@ static void emit(enum pmmp_log_level level, const char *text, size_t length) {
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_falcon_log, 0, 1, IS_VOID, 0)
     ZEND_ARG_TYPE_INFO(0, message, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, level, IS_LONG, 0, "0")
 ZEND_END_ARG_INFO()
 
+// falcon_log(message, level): 0 info, 1 warning, 2 error
 PHP_FUNCTION(falcon_log) {
     zend_string *message;
-    ZEND_PARSE_PARAMETERS_START(1, 1)
+    zend_long level = PMMP_LOG_INFO;
+    ZEND_PARSE_PARAMETERS_START(1, 2)
         Z_PARAM_STR(message)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG(level)
     ZEND_PARSE_PARAMETERS_END();
-    emit(PMMP_LOG_INFO, ZSTR_VAL(message), ZSTR_LEN(message));
+    if (level < PMMP_LOG_INFO || level > PMMP_LOG_ERROR)
+        level = PMMP_LOG_INFO;
+    emit((enum pmmp_log_level) level, ZSTR_VAL(message), ZSTR_LEN(message));
+}
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_falcon_plugin_folder, 0, 0, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+// the folder holding the plugins/ and plugin_data/ folders
+PHP_FUNCTION(falcon_plugin_folder) {
+    ZEND_PARSE_PARAMETERS_NONE();
+    RETURN_STRING(plugin_folder != NULL ? plugin_folder : "");
 }
 
 static const zend_function_entry falcon_functions[] = {
     PHP_FE(falcon_log, arginfo_falcon_log)
+    PHP_FE(falcon_plugin_folder, arginfo_falcon_plugin_folder)
     PHP_FE_END
 };
 
@@ -75,8 +94,13 @@ static void ini_defaults(HashTable *configuration) {
     set_default(configuration, "phar.readonly", "0");
 }
 
-int pmmp_php_start(pmmp_log_sink sink) {
+int pmmp_php_start(pmmp_log_sink sink, const char *folder) {
     log_sink = sink;
+    free(plugin_folder);
+    const size_t length = strlen(folder);
+    plugin_folder = malloc(length + 1);
+    if (plugin_folder != NULL)
+        memcpy(plugin_folder, folder, length + 1);
     php_embed_module.startup = startup_with_falcon;
     php_embed_module.ub_write = write_output;
     php_embed_module.log_message = write_log;
@@ -131,4 +155,6 @@ size_t pmmp_php_memory(int peak) {
 void pmmp_php_stop(void) {
     php_embed_shutdown();
     log_sink = NULL;
+    free(plugin_folder);
+    plugin_folder = NULL;
 }

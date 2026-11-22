@@ -1,0 +1,4 @@
+name: OldApi
+version: 1.0.0
+main: oldapi\Main
+api: 4.0.0

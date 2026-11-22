@@ -1,0 +1,4 @@
+name: Intruder
+version: 1.0.0
+main: pocketmine\Intruder
+api: 5.0.0

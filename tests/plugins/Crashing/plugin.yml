@@ -1,0 +1,4 @@
+name: Crashing
+version: 1.0.0
+main: crashing\Main
+api: 5.0.0

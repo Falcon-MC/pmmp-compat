@@ -1,0 +1,5 @@
+name: Lonely
+version: 1.0.0
+main: lonely\Main
+api: 5.0.0
+depend: [Nowhere]
