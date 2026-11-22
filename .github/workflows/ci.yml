@@ -82,6 +82,14 @@ jobs:
           cmake --build build --config Release
           cmake --install build --config Release --prefix dist
 
+      # older Falcon builds need zlib and openssl from MSYS2 beside the exe
+      - name: Install MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-zlib mingw-w64-x86_64-openssl
+
       - name: Download the Falcon nightly
         shell: bash
         env:
@@ -90,7 +98,11 @@ jobs:
           gh release download nightly -R Falcon-MC/Falcon -p 'FalconServer.exe' -p 'FalconServer.exe.sha256' -D falcon
           cd falcon
           [ "$(cut -d' ' -f1 FalconServer.exe.sha256)" = "$(sha256sum FalconServer.exe | cut -d' ' -f1)" ]
-          # Falcon loads a plugin without searching its folder for the dlls it needs: the server's folder is searched
+          mingw="$(cygpath -u "${{ runner.temp }}")/msys64/mingw64/bin"
+          for dll in libz-1.dll libssl-4-x64.dll libcrypto-4-x64.dll; do
+            [ -f "$mingw/$dll" ] && cp "$mingw/$dll" .
+          done
+          # older Falcon builds look for a plugin's dlls in the server's folder, not the plugin's
           cp ../dist/pmmp-compat/php8ts.dll .
 
       - name: Smoke test in Falcon
