@@ -14,7 +14,13 @@ class BanList{
     /** @var BanEntry[] what plugins added, by lower-case name */
     private array $known = [];
 
-    public function __construct(private bool $ip){
+    private bool $ip;
+
+    /**
+     * @param string|bool $file PocketMine-MP's ban file, whose name tells names from addresses; true for addresses
+     */
+    public function __construct(string|bool $file){
+        $this->ip = is_bool($file) ? $file : str_contains(strtolower(basename($file)), "ip");
     }
 
     public function isEnabled() : bool{

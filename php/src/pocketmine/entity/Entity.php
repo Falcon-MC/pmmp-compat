@@ -54,8 +54,16 @@ abstract class Entity{
         return $this->runtimeId;
     }
 
-    /** the game's identifier, minecraft:zombie */
-    public function getNetworkTypeId() : string{
+    /**
+     * The game's identifier of the class's entities, minecraft:zombie; a plugin's own entity class gives its own.
+     * Falcon's entities PocketMine-MP has no class for share a class: their identifier is getFalconTypeId()'s.
+     */
+    public static function getNetworkTypeId() : string{
+        return \pmmpcompat\Entities::networkTypeOf(static::class);
+    }
+
+    /** @internal the game's identifier of this entity, as Falcon has it */
+    public function getFalconTypeId() : string{
         return $this->info()["type"] ?? "";
     }
 

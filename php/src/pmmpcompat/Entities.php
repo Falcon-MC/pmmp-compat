@@ -49,6 +49,19 @@ final class Entities{
         "minecraft:squid" => Squid::class,
     ];
 
+    /** the identifier a PocketMine-MP entity class stands for, "" for the classes several types share */
+    public static function networkTypeOf(string $class) : string{
+        static $types = null;
+        if($types === null){
+            $types = [];
+            foreach(self::CLASSES as $identifier => $entityClass){
+                $types[$entityClass] ??= $identifier;
+            }
+            $types[FalconProjectile::class] = "";
+        }
+        return $types[$class] ?? "";
+    }
+
     /** @var Entity[] by runtime id */
     private static array $byId = [];
 
