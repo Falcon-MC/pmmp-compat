@@ -22,6 +22,16 @@ final class GlobalBlockStateHandlers{
         return self::$deserializer ??= new BlockStateDeserializer();
     }
 
+    /** what a block nobody knows saves as: an info_update block, as the game writes it */
+    public static function getUnknownBlockStateData() : \pocketmine\data\bedrock\block\BlockStateData{
+        return \pocketmine\data\bedrock\block\BlockStateData::current("minecraft:info_update", []);
+    }
+
+    /** where plugins map their blocks both ways; the serializer and deserializer take the mappings */
+    public static function getRegistrar() : \pocketmine\data\bedrock\block\convert\BlockSerializerDeserializerRegistrar{
+        return new \pocketmine\data\bedrock\block\convert\BlockSerializerDeserializerRegistrar(self::getDeserializer(), self::getSerializer());
+    }
+
     public static function getUpgrader() : BlockDataUpgrader{
         return self::$upgrader ??= new BlockDataUpgrader();
     }

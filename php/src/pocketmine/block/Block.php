@@ -80,6 +80,7 @@ class Block{
             $identifier === "minecraft:lava" || $identifier === "minecraft:flowing_lava" => Lava::class,
             $identifier === "minecraft:chest" || $identifier === "minecraft:trapped_chest" => Chest::class,
             $identifier === "minecraft:hopper" => Hopper::class,
+            $identifier === "minecraft:snow_layer" => SnowLayer::class,
             str_ends_with($identifier, "_leaves") => Leaves::class,
             $info === null => Block::class,
             !$info["solid"] => Flowable::class,
@@ -205,6 +206,22 @@ class Block{
 
     public function getTypeInfo() : BlockTypeInfo{
         return $this->typeInfo ??= new BlockTypeInfo($this->getBreakInfo());
+    }
+
+    /**
+     * the states this type can be in: Falcon knows them, a plugin's own block is in this one
+     * @return \Generator<int, Block, void, void>
+     */
+    public function generateStatePermutations() : \Generator{
+        yield $this;
+    }
+
+    public function getRequiredTypeDataBits() : int{
+        return 0;
+    }
+
+    public function getRequiredStateDataBits() : int{
+        return 0;
     }
 
     public function hasSameTypeId(Block $other) : bool{

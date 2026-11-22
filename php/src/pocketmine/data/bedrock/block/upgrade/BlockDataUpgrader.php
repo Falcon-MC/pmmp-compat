@@ -9,6 +9,12 @@ use pocketmine\nbt\tag\CompoundTag;
 
 /** Saved block states of older games to the current one; Falcon reads its worlds itself, these pass through */
 final class BlockDataUpgrader{
+    private ?BlockStateUpgrader $blockStateUpgrader = null;
+
+    public function getBlockStateUpgrader() : BlockStateUpgrader{
+        return $this->blockStateUpgrader ??= new BlockStateUpgrader();
+    }
+
     public function upgradeIntIdMeta(int $id, int $meta) : BlockStateData{
         throw new \pocketmine\data\bedrock\block\BlockStateDeserializeException("Numeric block ids are not known any more ($id:$meta)");
     }

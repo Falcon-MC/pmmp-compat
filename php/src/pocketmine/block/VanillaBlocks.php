@@ -80,6 +80,12 @@ final class VanillaBlocks{
     }
 
     /** a block of that identifier, null when the game has none */
+    /** a block by PocketMine-MP's name for it, DIAMOND for the diamond block, or by the game's identifier */
+    public static function fromName(string $name) : ?Block{
+        $path = strtolower($name);
+        return self::fromIdentifier(self::ALIASES[$path] ?? $path);
+    }
+
     public static function fromIdentifier(string $identifier) : ?Block{
         $identifier = strtolower($identifier);
         if(!str_contains($identifier, ":")){

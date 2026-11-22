@@ -48,7 +48,13 @@ final class StringToItemParser{
         if($key === ""){
             return null;
         }
-        return VanillaItems::fromIdentifier($key);
+        $item = VanillaItems::fromName($key);
+        if($item === null){
+            // a block's name, as PocketMine-MP's names it: the item that places it
+            $block = \pocketmine\block\VanillaBlocks::fromName($key);
+            $item = $block !== null && $block->getFalconIdentifier() !== "minecraft:air" ? $block->asItem() : null;
+        }
+        return $item === null || ($item->isNull() && $key !== "air") ? null : $item;
     }
 
     public function parseBlock(string $input) : ?\pocketmine\block\Block{

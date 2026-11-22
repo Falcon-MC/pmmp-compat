@@ -38,6 +38,12 @@ final class VanillaItems{
     private function __construct(){
     }
 
+    /** an item by PocketMine-MP's name for it, RAW_BEEF, or by the game's identifier */
+    public static function fromName(string $name) : ?Item{
+        $path = strtolower($name);
+        return self::fromIdentifier(self::ALIASES[$path] ?? $path);
+    }
+
     /** an item of that identifier, null when the game has none */
     public static function fromIdentifier(string $identifier) : ?Item{
         $identifier = strtolower($identifier);

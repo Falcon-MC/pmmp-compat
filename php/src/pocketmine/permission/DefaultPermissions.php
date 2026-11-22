@@ -145,5 +145,20 @@ abstract class DefaultPermissions{
 		] as $permission){
 			self::registerNoArgsDesc($permission, [$everyoneRoot]);
 		}
+
+		//pmmp-compat: the group names older PocketMine-MP versions gave, pocketmine.command.ban for .ban.player and
+		//.ban.ip, which plugins still give their commands; each grants what it grouped
+		$manager = PermissionManager::getInstance();
+		$groups = [];
+		foreach($manager->getPermissions() as $name => $permission){
+			if(preg_match('/^(pocketmine\.command\.[a-z]+)\./', $name, $match) === 1){
+				$groups[$match[1]][] = $name;
+			}
+		}
+		foreach($groups as $group => $children){
+			if($manager->getPermission($group) === null){
+				$manager->addPermission(new Permission($group, "", array_fill_keys($children, true)));
+			}
+		}
 	}
 }
