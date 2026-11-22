@@ -64,6 +64,7 @@ class Server{
         $this->pluginManager = new PluginManager($this, $pluginDataPath);
         $this->asyncPool = new AsyncPool();
         $this->worldManager = new WorldManager();
+        $this->startTime = microtime(true);
     }
 
     public function getWorldManager() : WorldManager{
@@ -91,11 +92,20 @@ class Server{
 
     /** Falcon runs at the game's 20 ticks a second */
     public function getTicksPerSecond() : float{
-        return 20.0;
+        return round(falcon_server_tps()[0], 2);
     }
 
     public function getTicksPerSecondAverage() : float{
-        return 20.0;
+        return $this->getTicksPerSecond();
+    }
+
+    /** how much of a tick's 50 ms the last tick took, in percent */
+    public function getTickUsage() : float{
+        return round(falcon_server_tps()[1] / 50 * 100, 2);
+    }
+
+    public function getTickUsageAverage() : float{
+        return $this->getTickUsage();
     }
 
     public function getAsyncPool() : AsyncPool{
@@ -222,6 +232,9 @@ class Server{
             }
         }
         $subscribers[spl_object_id($this->logForwarder)] = $this->logForwarder;
+        foreach($this->subscriptions[$channelId] ?? [] as $id => $subscriber){
+            $subscribers[$id] = $subscriber;
+        }
         return $subscribers;
     }
 
@@ -246,5 +259,249 @@ class Server{
     /** @return Command[] */
     public function getCommandAliases() : array{
         return [];
+    }
+
+    private ?\pocketmine\permission\BanList $nameBans = null;
+    private ?\pocketmine\permission\BanList $ipBans = null;
+    private ?\pocketmine\resourcepacks\ResourcePackManager $resourcePackManager = null;
+    private ?\Ramsey\Uuid\UuidInterface $serverId = null;
+    private float $startTime = 0.0;
+
+    public function getNameBans() : \pocketmine\permission\BanList{
+        return $this->nameBans ??= new \pocketmine\permission\BanList(false);
+    }
+
+    public function getIPBans() : \pocketmine\permission\BanList{
+        return $this->ipBans ??= new \pocketmine\permission\BanList(true);
+    }
+
+    public function getResourcePackManager() : \pocketmine\resourcepacks\ResourcePackManager{
+        return $this->resourcePackManager ??= new \pocketmine\resourcepacks\ResourcePackManager($this->dataPath . "resource_packs" . DIRECTORY_SEPARATOR);
+    }
+
+    /** an id for this server, the same from one start to the next: kept in the data folder */
+    public function getServerUniqueId() : \Ramsey\Uuid\UuidInterface{
+        if($this->serverId === null){
+            $file = $this->pluginPath . DIRECTORY_SEPARATOR . ".pmmp-compat-server-id";
+            $saved = @file_get_contents($file);
+            if($saved !== false && \Ramsey\Uuid\Uuid::isValid(trim($saved))){
+                $this->serverId = \Ramsey\Uuid\Uuid::fromString(trim($saved));
+            }else{
+                $this->serverId = \Ramsey\Uuid\Uuid::uuid4();
+                @file_put_contents($file, $this->serverId->toString());
+            }
+        }
+        return $this->serverId;
+    }
+
+    public function getMaxPlayers() : int{
+        return falcon_server_max_players();
+    }
+
+    public function getMotd() : string{
+        return falcon_server_motd();
+    }
+
+    public function getOnlineMode() : bool{
+        return true;
+    }
+
+    public function requiresAuthentication() : bool{
+        return true;
+    }
+
+    public function getPort() : int{
+        return 19132;
+    }
+
+    public function getPortV6() : int{
+        return 19133;
+    }
+
+    public function getIp() : string{
+        return "0.0.0.0";
+    }
+
+    public function getIpV6() : string{
+        return "::";
+    }
+
+    public function getViewDistance() : int{
+        return 8;
+    }
+
+    public function getAllowedViewDistance(int $distance) : int{
+        return max(2, min($distance, $this->getViewDistance()));
+    }
+
+    public function getGamemode() : \pocketmine\player\GameMode{
+        return \pocketmine\player\GameMode::SURVIVAL();
+    }
+
+    public function getForceGamemode() : bool{
+        return false;
+    }
+
+    /** one of World's DIFFICULTY_ numbers */
+    public function getDifficulty() : int{
+        return falcon_server_difficulty();
+    }
+
+    public function hasWhitelist() : bool{
+        return falcon_server_allow_list_enabled();
+    }
+
+    public function isWhitelisted(string $name) : bool{
+        return !$this->hasWhitelist() || $this->isOp($name)
+            || in_array(strtolower($name), array_map('strtolower', falcon_server_allow_list()), true);
+    }
+
+    public function addWhitelist(string $name) : void{
+        falcon_server_allow($name, true);
+    }
+
+    public function removeWhitelist(string $name) : void{
+        falcon_server_allow($name, false);
+    }
+
+    public function getWhitelisted() : \pocketmine\utils\Config{
+        $config = new \pocketmine\utils\Config($this->dataPath . "white-list.txt", \pocketmine\utils\Config::ENUM);
+        $config->setAll(array_fill_keys(array_map('strtolower', falcon_server_allow_list()), true));
+        return $config;
+    }
+
+    public function addOp(string $name) : void{
+        $player = $this->getPlayerExact($name);
+        if($player !== null){
+            falcon_player_set_operator($player->getHandle(), true);
+        }else{
+            $this->dispatchCommand($this->console, "op " . $name);
+        }
+    }
+
+    public function removeOp(string $name) : void{
+        $player = $this->getPlayerExact($name);
+        if($player !== null){
+            falcon_player_set_operator($player->getHandle(), false);
+        }else{
+            $this->dispatchCommand($this->console, "deop " . $name);
+        }
+    }
+
+    public function isHardcore() : bool{
+        return false;
+    }
+
+    public function getStartTime() : float{
+        return $this->startTime;
+    }
+
+    public function getPlayerByUUID(\Ramsey\Uuid\UuidInterface $uuid) : ?Player{
+        foreach(Players::online() as $player){
+            if($player->getUniqueId()->equals($uuid)){
+                return $player;
+            }
+        }
+        return null;
+    }
+
+    public function getPlayerByRawUUID(string $rawUUID) : ?Player{
+        try{
+            return $this->getPlayerByUUID(\Ramsey\Uuid\Uuid::fromBytes($rawUUID));
+        }catch(\InvalidArgumentException){
+            return null;
+        }
+    }
+
+    public function shouldSavePlayerData() : bool{
+        return true;
+    }
+
+    public function hasOfflinePlayerData(string $name) : bool{
+        return false;
+    }
+
+    public function getOfflinePlayerData(string $name) : ?\pocketmine\nbt\tag\CompoundTag{
+        return null;
+    }
+
+    public function getOfflinePlayer(string $name) : Player|\pocketmine\player\OfflinePlayer|null{
+        return $this->getPlayerExact($name) ?? new \pocketmine\player\OfflinePlayer($name, null);
+    }
+
+    /**
+     * @param Player[]|null $recipients
+     */
+    public function broadcastTip(string $tip, ?array $recipients = null) : int{
+        $recipients ??= $this->playersOf(self::BROADCAST_CHANNEL_USERS);
+        foreach($recipients as $player){
+            $player->sendTip($tip);
+        }
+        return count($recipients);
+    }
+
+    /**
+     * @param Player[]|null $recipients
+     */
+    public function broadcastPopup(string $popup, ?array $recipients = null) : int{
+        $recipients ??= $this->playersOf(self::BROADCAST_CHANNEL_USERS);
+        foreach($recipients as $player){
+            $player->sendPopup($popup);
+        }
+        return count($recipients);
+    }
+
+    /**
+     * @param Player[]|null $recipients
+     */
+    public function broadcastTitle(string $title, string $subtitle = "", int $fadeIn = -1, int $stay = -1, int $fadeOut = -1, ?array $recipients = null) : int{
+        $recipients ??= $this->playersOf(self::BROADCAST_CHANNEL_USERS);
+        foreach($recipients as $player){
+            $player->sendTitle($title, $subtitle, $fadeIn, $stay, $fadeOut);
+        }
+        return count($recipients);
+    }
+
+    /** @return Player[] */
+    private function playersOf(string $channel) : array{
+        return array_filter($this->getBroadcastChannelSubscribers($channel), static fn($sender) => $sender instanceof Player);
+    }
+
+    /** @var array<string, array<int, CommandSender>> what plugins subscribed, by channel */
+    private array $subscriptions = [];
+
+    public function subscribeToBroadcastChannel(string $channelId, CommandSender $subscriber) : void{
+        $this->subscriptions[$channelId][spl_object_id($subscriber)] = $subscriber;
+    }
+
+    public function unsubscribeFromBroadcastChannel(string $channelId, CommandSender $subscriber) : void{
+        unset($this->subscriptions[$channelId][spl_object_id($subscriber)]);
+    }
+
+    public function unsubscribeFromAllBroadcastChannels(CommandSender $subscriber) : void{
+        foreach($this->subscriptions as $channelId => $subscribers){
+            unset($this->subscriptions[$channelId][spl_object_id($subscriber)]);
+        }
+    }
+
+    /** stops the server, as /stop does */
+    public function shutdown() : void{
+        falcon_server_shutdown();
+    }
+
+    public function forceShutdown() : void{
+        $this->shutdown();
+    }
+
+    public function isLanguageForced() : bool{
+        return false;
+    }
+
+    public function getFilePath() : string{
+        return $this->dataPath;
+    }
+
+    public function getResourcePath() : string{
+        return $this->dataPath;
     }
 }

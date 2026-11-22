@@ -10,7 +10,7 @@ Copied as released, without their tests and command line tools. Each keeps its l
 | [pocketmine/nbt](https://github.com/pmmp/NBT) | 1.2.0 | `bddc55a3efa4d1e0ac23b2c7fb2b9dc8708f7ed2e411e0dcf97cdf6f61099524` | LGPL-3.0 |
 | [pocketmine/color](https://github.com/pmmp/Color) | 0.3.1 | `57918710c63cadeb54041e9c249f91e5e6c36b237874d56dd488f8a0f3ab0c71` | LGPL-3.0 |
 | [pocketmine/callback-validator](https://github.com/pmmp/CallbackValidator) | 1.0.4 | `bafb83af1857ae92384ddbb3ed7cf45215acdd262bff78c5eca9029911893cd0` | MIT |
-| [pocketmine/bedrock-protocol](https://github.com/pmmp/BedrockProtocol) | 58.0.1+bedrock-1.26.30 | the tag's GitHub tarball | LGPL-3.0 |
+| [altayofficial/BedrockProtocol](https://github.com/altayofficial/BedrockProtocol), `pocketmine/bedrock-protocol` | bedrock-1.26.60 (`3f074f2`) | the commit's GitHub tarball | LGPL-3.0 |
 | [ramsey/uuid](https://github.com/ramsey/uuid) | 4.9.3 | `55857b37190a6f6cb1141aa7e0533170ef01871f40def01c1930adc20866af14` | MIT |
 | [ramsey/collection](https://github.com/ramsey/collection) | 2.1.1 | `54b69e8af6b249f27bc8b787cca58b41e8aba78272af8d41518bd1723181e931` | MIT |
 | [brick/math](https://github.com/brick/math) | 0.13.1 | `ad05e9fc391722f263acca6df51fdcdb66ab948f22cfd530972d782b8853d884` | MIT |

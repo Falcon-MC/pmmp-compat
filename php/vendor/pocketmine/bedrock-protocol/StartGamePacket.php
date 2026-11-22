@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -62,7 +73,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 	public bool $enableClientSideChunkGeneration;
 	public bool $blockNetworkIdsAreHashes = false; //new in 1.19.80, possibly useful for multi version
 	public NetworkPermissions $networkPermissions;
-	public bool $isLoggingChat = false;
 	public ?ServerJoinInformation $serverJoinInformation;
 	public ServerTelemetryData $serverTelemetryData;
 
@@ -108,7 +118,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 		bool $enableClientSideChunkGeneration,
 		bool $blockNetworkIdsAreHashes,
 		NetworkPermissions $networkPermissions,
-		bool $isLoggingChat,
 		?ServerJoinInformation $serverJoinInformation,
 		ServerTelemetryData $serverTelemetryData,
 		array $blockPalette,
@@ -137,7 +146,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 		$result->enableClientSideChunkGeneration = $enableClientSideChunkGeneration;
 		$result->blockNetworkIdsAreHashes = $blockNetworkIdsAreHashes;
 		$result->networkPermissions = $networkPermissions;
-		$result->isLoggingChat = $isLoggingChat;
 		$result->serverJoinInformation = $serverJoinInformation;
 		$result->serverTelemetryData = $serverTelemetryData;
 		$result->blockPalette = $blockPalette;
@@ -182,7 +190,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 		$this->enableClientSideChunkGeneration = CommonTypes::getBool($in);
 		$this->blockNetworkIdsAreHashes = CommonTypes::getBool($in);
 		$this->networkPermissions = NetworkPermissions::decode($in);
-		$this->isLoggingChat = CommonTypes::getBool($in);
 		$this->serverJoinInformation = CommonTypes::readOptional($in, ServerJoinInformation::read(...));
 		$this->serverTelemetryData = ServerTelemetryData::read($in);
 	}
@@ -223,7 +230,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 		CommonTypes::putBool($out, $this->enableClientSideChunkGeneration);
 		CommonTypes::putBool($out, $this->blockNetworkIdsAreHashes);
 		$this->networkPermissions->encode($out);
-		CommonTypes::putBool($out, $this->isLoggingChat);
 		CommonTypes::writeOptional($out, $this->serverJoinInformation, fn(ByteBufferWriter $out, ServerJoinInformation $info) => $info->write($out));
 		$this->serverTelemetryData->write($out);
 	}

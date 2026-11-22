@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -20,6 +31,7 @@ use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\LE;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use pocketmine\network\mcpe\protocol\types\BossBarColor;
+use pocketmine\network\mcpe\protocol\types\BossBarOverlay;
 
 class BossEventPacket extends DataPacket implements ClientboundPacket, ServerboundPacket{
 	public const NETWORK_ID = ProtocolInfo::BOSS_EVENT_PACKET;
@@ -46,11 +58,10 @@ class BossEventPacket extends DataPacket implements ClientboundPacket, Serverbou
 	public int $bossActorUniqueId;
 	public int $eventType;
 
-	public int $playerActorUniqueId = 0;
 	public float $healthPercent = 0.0;
 	public string $title = "";
 	public string $filteredTitle = "";
-	public int $color = BossBarColor::PINK;
+	public int $color = BossBarColor::PURPLE;
 	public int $overlay = 0;
 
 	private static function base(int $bossActorUniqueId, int $eventId) : self{
@@ -60,7 +71,7 @@ class BossEventPacket extends DataPacket implements ClientboundPacket, Serverbou
 		return $result;
 	}
 
-	public static function show(int $bossActorUniqueId, string $title, float $healthPercent, int $color = BossBarColor::PURPLE, int $overlay = 0) : self{
+	public static function show(int $bossActorUniqueId, string $title, float $healthPercent, int $color = BossBarColor::PURPLE, int $overlay = BossBarOverlay::PROGRESS) : self{
 		$result = self::base($bossActorUniqueId, self::TYPE_SHOW);
 		$result->title = $title;
 		$result->filteredTitle = $title;
@@ -74,16 +85,12 @@ class BossEventPacket extends DataPacket implements ClientboundPacket, Serverbou
 		return self::base($bossActorUniqueId, self::TYPE_HIDE);
 	}
 
-	public static function registerPlayer(int $bossActorUniqueId, int $playerActorUniqueId) : self{
-		$result = self::base($bossActorUniqueId, self::TYPE_REGISTER_PLAYER);
-		$result->playerActorUniqueId = $playerActorUniqueId;
-		return $result;
+	public static function registerPlayer(int $bossActorUniqueId) : self{
+		return self::base($bossActorUniqueId, self::TYPE_REGISTER_PLAYER);
 	}
 
-	public static function unregisterPlayer(int $bossActorUniqueId, int $playerActorUniqueId) : self{
-		$result = self::base($bossActorUniqueId, self::TYPE_UNREGISTER_PLAYER);
-		$result->playerActorUniqueId = $playerActorUniqueId;
-		return $result;
+	public static function unregisterPlayer(int $bossActorUniqueId) : self{
+		return self::base($bossActorUniqueId, self::TYPE_UNREGISTER_PLAYER);
 	}
 
 	public static function healthPercent(int $bossActorUniqueId, float $healthPercent) : self{
@@ -99,22 +106,19 @@ class BossEventPacket extends DataPacket implements ClientboundPacket, Serverbou
 		return $result;
 	}
 
-	public static function properties(int $bossActorUniqueId, int $color = BossBarColor::PURPLE, int $overlay = 0) : self{
+	public static function properties(int $bossActorUniqueId, int $color = BossBarColor::PURPLE, int $overlay = BossBarOverlay::PROGRESS) : self{
 		$result = self::base($bossActorUniqueId, self::TYPE_PROPERTIES);
 		$result->color = $color;
 		$result->overlay = $overlay;
 		return $result;
 	}
 
-	public static function query(int $bossActorUniqueId, int $playerActorUniqueId) : self{
-		$result = self::base($bossActorUniqueId, self::TYPE_QUERY);
-		$result->playerActorUniqueId = $playerActorUniqueId;
-		return $result;
+	public static function query(int $bossActorUniqueId) : self{
+		return self::base($bossActorUniqueId, self::TYPE_QUERY);
 	}
 
 	protected function decodePayload(ByteBufferReader $in) : void{
 		$this->bossActorUniqueId = CommonTypes::getActorUniqueId($in);
-		$this->playerActorUniqueId = CommonTypes::getActorUniqueId($in);
 		$this->eventType = Byte::readUnsigned($in);
 		$this->title = CommonTypes::getString($in);
 		$this->filteredTitle = CommonTypes::getString($in);
@@ -125,7 +129,6 @@ class BossEventPacket extends DataPacket implements ClientboundPacket, Serverbou
 
 	protected function encodePayload(ByteBufferWriter $out) : void{
 		CommonTypes::putActorUniqueId($out, $this->bossActorUniqueId);
-		CommonTypes::putActorUniqueId($out, $this->playerActorUniqueId);
 		Byte::writeUnsigned($out, $this->eventType);
 		CommonTypes::putString($out, $this->title);
 		CommonTypes::putString($out, $this->filteredTitle);

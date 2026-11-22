@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -37,6 +48,7 @@ final class LevelSettings{
 	public int $editorWorldType = EditorWorldType::NON_EDITOR;
 	public bool $createdInEditorMode = false;
 	public bool $exportedFromEditorMode = false;
+	public EditorLevelMigrationVersion $editorLevelMigrationVersion = EditorLevelMigrationVersion::LEGACY;
 	public int $time = -1;
 	public int $eduEditionOffer = EducationEditionOffer::NONE;
 	public bool $hasEduFeaturesEnabled = false;
@@ -111,8 +123,9 @@ final class LevelSettings{
 		$this->editorWorldType = VarInt::readSignedInt($in);
 		$this->createdInEditorMode = CommonTypes::getBool($in);
 		$this->exportedFromEditorMode = CommonTypes::getBool($in);
+		$this->editorLevelMigrationVersion = EditorLevelMigrationVersion::fromPacket(Byte::readSigned($in));
 		$this->time = VarInt::readSignedInt($in);
-		$this->eduEditionOffer = VarInt::readSignedInt($in);
+		$this->eduEditionOffer = VarInt::readUnsignedInt($in);
 		$this->hasEduFeaturesEnabled = CommonTypes::getBool($in);
 		$this->eduProductUUID = CommonTypes::getString($in);
 		$this->rainLevel = LE::readFloat($in);
@@ -124,11 +137,11 @@ final class LevelSettings{
 		$this->platformBroadcastMode = VarInt::readSignedInt($in);
 		$this->commandsEnabled = CommonTypes::getBool($in);
 		$this->isTexturePacksRequired = CommonTypes::getBool($in);
-		$this->gameRules = CommonTypes::getGameRules($in, true);
+		$this->gameRules = CommonTypes::getGameRules($in, false);
 		$this->experiments = Experiments::read($in);
 		$this->hasBonusChestEnabled = CommonTypes::getBool($in);
 		$this->hasStartWithMapEnabled = CommonTypes::getBool($in);
-		$this->defaultPlayerPermission = VarInt::readSignedInt($in);
+		$this->defaultPlayerPermission = Byte::readUnsigned($in);
 		$this->serverChunkTickRadius = LE::readSignedInt($in); //doesn't make sense for this to be signed, but that's what the spec says
 		$this->hasLockedBehaviorPack = CommonTypes::getBool($in);
 		$this->hasLockedResourcePack = CommonTypes::getBool($in);
@@ -164,8 +177,9 @@ final class LevelSettings{
 		VarInt::writeSignedInt($out, $this->editorWorldType);
 		CommonTypes::putBool($out, $this->createdInEditorMode);
 		CommonTypes::putBool($out, $this->exportedFromEditorMode);
+		Byte::writeSigned($out, $this->editorLevelMigrationVersion->value);
 		VarInt::writeSignedInt($out, $this->time);
-		VarInt::writeSignedInt($out, $this->eduEditionOffer);
+		VarInt::writeUnsignedInt($out, $this->eduEditionOffer);
 		CommonTypes::putBool($out, $this->hasEduFeaturesEnabled);
 		CommonTypes::putString($out, $this->eduProductUUID);
 		LE::writeFloat($out, $this->rainLevel);
@@ -177,11 +191,11 @@ final class LevelSettings{
 		VarInt::writeSignedInt($out, $this->platformBroadcastMode);
 		CommonTypes::putBool($out, $this->commandsEnabled);
 		CommonTypes::putBool($out, $this->isTexturePacksRequired);
-		CommonTypes::putGameRules($out, $this->gameRules, true);
+		CommonTypes::putGameRules($out, $this->gameRules, false);
 		$this->experiments->write($out);
 		CommonTypes::putBool($out, $this->hasBonusChestEnabled);
 		CommonTypes::putBool($out, $this->hasStartWithMapEnabled);
-		VarInt::writeSignedInt($out, $this->defaultPlayerPermission);
+		Byte::writeUnsigned($out, $this->defaultPlayerPermission);
 		LE::writeSignedInt($out, $this->serverChunkTickRadius); //doesn't make sense for this to be signed, but that's what the spec says
 		CommonTypes::putBool($out, $this->hasLockedBehaviorPack);
 		CommonTypes::putBool($out, $this->hasLockedResourcePack);

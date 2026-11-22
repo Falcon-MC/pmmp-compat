@@ -43,8 +43,104 @@ class Block{
     public static function fromFalcon(string $identifier, string $statesJson) : Block{
         $states = json_decode($statesJson, true);
         $states = is_array($states) ? $states : [];
-        return str_ends_with($identifier, "_sign") || $identifier === "minecraft:standing_sign" || $identifier === "minecraft:wall_sign"
-            ? new BaseSign($identifier, $states) : new Block($identifier, $states);
+        return new (self::classFor($identifier))($identifier, $states);
+    }
+
+    /** @var array<string, class-string<Block>> */
+    private static array $classes = [];
+
+    /** the PocketMine-MP class a block type gets: by what it is, then by what Falcon knows of it */
+    private static function classFor(string $identifier) : string{
+        if(isset(self::$classes[$identifier])){
+            return self::$classes[$identifier];
+        }
+        $info = \pmmpcompat\ItemTypes::block($identifier);
+        return self::$classes[$identifier] = match(true){
+            str_ends_with($identifier, "_sign") || $identifier === "minecraft:standing_sign" || $identifier === "minecraft:wall_sign" => BaseSign::class,
+            $identifier === "minecraft:air" || str_ends_with($identifier, "_air") => Air::class,
+            $identifier === "minecraft:water" || $identifier === "minecraft:flowing_water" => Water::class,
+            $identifier === "minecraft:lava" || $identifier === "minecraft:flowing_lava" => Lava::class,
+            $identifier === "minecraft:chest" || $identifier === "minecraft:trapped_chest" => Chest::class,
+            str_ends_with($identifier, "_leaves") => Leaves::class,
+            $info === null => Block::class,
+            !$info["solid"] => Flowable::class,
+            $info["transparent"] => Transparent::class,
+            default => Opaque::class,
+        };
+    }
+
+    private function info() : ?array{
+        return \pmmpcompat\ItemTypes::block($this->identifier);
+    }
+
+    public function getBreakInfo() : BlockBreakInfo{
+        $info = $this->info();
+        if($info === null){
+            return new BlockBreakInfo(1.0);
+        }
+        $toolType = $info["toolType"] > 0 && $info["toolType"] <= 6 ? 1 << ($info["toolType"] - 1) : BlockToolType::NONE;
+        $level = \pmmpcompat\ItemTypes::tier($info["toolTier"])?->getHarvestLevel() ?? 0;
+        return new BlockBreakInfo($info["hardness"], $toolType, $level, $info["blastResistance"]);
+    }
+
+    public function getLightLevel() : int{
+        return (int) ($this->info()["lightEmission"] ?? 0);
+    }
+
+    public function getLightFilter() : int{
+        return $this->isTransparent() ? 0 : 15;
+    }
+
+    public function isTransparent() : bool{
+        return (bool) ($this->info()["transparent"] ?? false);
+    }
+
+    public function isSolid() : bool{
+        return (bool) ($this->info()["solid"] ?? true);
+    }
+
+    public function isFullCube() : bool{
+        return $this->isSolid() && !$this->isTransparent();
+    }
+
+    public function canBeFlowedInto() : bool{
+        return false;
+    }
+
+    public function canBeReplaced() : bool{
+        return false;
+    }
+
+    public function getFlameEncouragement() : int{
+        return (int) ($this->info()["flameEncouragement"] ?? 0);
+    }
+
+    public function getFlammability() : int{
+        return (int) ($this->info()["flammability"] ?? 0);
+    }
+
+    public function isFlammable() : bool{
+        return $this->getFlammability() > 0;
+    }
+
+    public function burnsForever() : bool{
+        return false;
+    }
+
+    public function getFrictionFactor() : float{
+        return 0.6;
+    }
+
+    public function hasEntityCollision() : bool{
+        return false;
+    }
+
+    public function isAffectedBySilkTouch() : bool{
+        return true;
+    }
+
+    public function getMaxStackSize() : int{
+        return (int) ($this->info()["maxStackSize"] ?? 64);
     }
 
     /** @internal a copy of this state at a place in a world */

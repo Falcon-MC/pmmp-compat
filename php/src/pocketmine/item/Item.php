@@ -58,7 +58,7 @@ class Item implements \JsonSerializable{
      * @param array{id: string, count: int, damage: int, nbt: string} $data
      */
     public static function fromFalcon(array $data) : Item{
-        $item = new self($data["id"]);
+        $item = \pmmpcompat\ItemTypes::create($data["id"]);
         $item->count = $data["count"];
         $item->damage = $data["damage"];
         if($data["nbt"] !== ""){
@@ -173,7 +173,72 @@ class Item implements \JsonSerializable{
     }
 
     public function getMaxStackSize() : int{
-        return 64;
+        return (int) (\pmmpcompat\ItemTypes::item($this->identifier)["maxStackSize"]
+            ?? \pmmpcompat\ItemTypes::block($this->identifier)["maxStackSize"] ?? 64);
+    }
+
+    /** the damage a hit with it deals, 1 for an item that is not a weapon */
+    public function getAttackPoints() : int{
+        return 1;
+    }
+
+    /** the armour points it gives worn, 0 for an item that is not armour */
+    public function getDefensePoints() : int{
+        return 0;
+    }
+
+    /** one of BlockToolType's bits: the blocks it mines faster */
+    public function getBlockToolType() : int{
+        return \pocketmine\block\BlockToolType::NONE;
+    }
+
+    public function getBlockToolHarvestLevel() : int{
+        return 0;
+    }
+
+    public function getMiningEfficiency(bool $isCorrectTool) : float{
+        return 1;
+    }
+
+    /** ticks it burns for in a furnace, 0 for an item that is not fuel */
+    public function getFuelTime() : int{
+        return 0;
+    }
+
+    public function getFuelResidue() : Item{
+        $item = clone $this;
+        $item->pop();
+        return $item;
+    }
+
+    public function isFireProof() : bool{
+        return str_contains($this->identifier, "netherite");
+    }
+
+    public function getEnchantability() : int{
+        return 1;
+    }
+
+    public function getCooldownTicks() : int{
+        return 0;
+    }
+
+    public function getCooldownTag() : ?string{
+        return null;
+    }
+
+    /** @param Item[] &$returnedItems */
+    public function onAttackEntity(\pocketmine\entity\Entity $victim, array &$returnedItems) : bool{
+        return false;
+    }
+
+    /** @param Item[] &$returnedItems */
+    public function onDestroyBlock(Block $block, array &$returnedItems) : bool{
+        return false;
+    }
+
+    public function keepOnDeath() : bool{
+        return false;
     }
 
     /** the damage a tool or armour has taken; 0 for items that take none */

@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -33,31 +44,29 @@ final class SubChunkPosition{
 
 	public function getZ() : int{ return $this->z; }
 
-	public static function readFixedInts(ByteBufferReader $in) : self{
-		$x = LE::readSignedInt($in);
-		$y = LE::readSignedInt($in);
-		$z = LE::readSignedInt($in);
+	public static function read(ByteBufferReader $in, bool $cereal = false) : self{
+		if($cereal){
+			$x = LE::readSignedInt($in);
+			$y = LE::readSignedInt($in);
+			$z = LE::readSignedInt($in);
+		}else{
+			$x = VarInt::readSignedInt($in);
+			$y = VarInt::readSignedInt($in);
+			$z = VarInt::readSignedInt($in);
+		}
 
 		return new self($x, $y, $z);
 	}
 
-	public static function readVarInts(ByteBufferReader $in) : self{
-		$x = VarInt::readSignedInt($in);
-		$y = VarInt::readSignedInt($in);
-		$z = VarInt::readSignedInt($in);
-
-		return new self($x, $y, $z);
-	}
-
-	public function writeFixedInts(ByteBufferWriter $out) : void{
-		LE::writeSignedInt($out, $this->x);
-		LE::writeSignedInt($out, $this->y);
-		LE::writeSignedInt($out, $this->z);
-	}
-
-	public function writeVarInts(ByteBufferWriter $out) : void{
-		VarInt::writeSignedInt($out, $this->x);
-		VarInt::writeSignedInt($out, $this->y);
-		VarInt::writeSignedInt($out, $this->z);
+	public function write(ByteBufferWriter $out, bool $cereal = false) : void{
+		if($cereal){
+			LE::writeSignedInt($out, $this->x);
+			LE::writeSignedInt($out, $this->y);
+			LE::writeSignedInt($out, $this->z);
+		}else{
+			VarInt::writeSignedInt($out, $this->x);
+			VarInt::writeSignedInt($out, $this->y);
+			VarInt::writeSignedInt($out, $this->z);
+		}
 	}
 }

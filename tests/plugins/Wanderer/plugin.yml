@@ -1,0 +1,4 @@
+name: Wanderer
+version: 1.0.0
+main: wanderer\Main
+api: 5.0.0

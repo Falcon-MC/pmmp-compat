@@ -215,6 +215,88 @@ abstract class Entity{
         return 1.0;
     }
 
+    /** ticks left burning as this last set them; Falcon only tells whether it burns */
+    private int $fireTicks = 0;
+
+    public function isOnFire() : bool{
+        return $this->info()["onFire"] ?? false;
+    }
+
+    /** sets the entity on fire for that many seconds, as PocketMine-MP's does */
+    public function setOnFire(int $seconds) : void{
+        $this->setFireTicks($seconds * 20);
+    }
+
+    public function getFireTicks() : int{
+        return $this->isOnFire() ? max($this->fireTicks, 1) : 0;
+    }
+
+    public function setFireTicks(int $fireTicks) : void{
+        if($fireTicks < 0){
+            throw new \InvalidArgumentException("Fire ticks cannot be negative");
+        }
+        $this->fireTicks = $fireTicks;
+        $handle = $this->getEntityHandle();
+        if($handle !== 0){
+            falcon_entity_set_on_fire($handle, $fireTicks);
+        }
+    }
+
+    public function extinguish(int $cause = 0) : void{
+        $this->setFireTicks(0);
+    }
+
+    public function isFireProof() : bool{
+        return false;
+    }
+
+    public function isInvisible() : bool{
+        return $this->info()["invisible"] ?? false;
+    }
+
+    public function setInvisible(bool $value = true) : void{
+        $handle = $this->getEntityHandle();
+        if($handle !== 0){
+            falcon_entity_set_invisible($handle, $value);
+        }
+    }
+
+    public function isNameTagVisible() : bool{
+        return $this->getNameTag() !== "";
+    }
+
+    public function setNameTagVisible(bool $value = true) : void{
+    }
+
+    public function setNameTagAlwaysVisible(bool $value = true) : void{
+    }
+
+    /** an attribute Falcon keeps, by its game name: [value, min, max, default] */
+    protected function attribute(string $name) : ?array{
+        $handle = $this->getEntityHandle();
+        return $handle === 0 ? null : falcon_entity_attribute($handle, $name);
+    }
+
+    protected function setAttribute(string $name, float $value) : void{
+        $handle = $this->getEntityHandle();
+        if($handle !== 0){
+            falcon_entity_set_attribute($handle, $name, $value);
+        }
+    }
+
+    /**
+     * @param \pocketmine\player\Player[]|null $targets everyone near when null
+     */
+    public function broadcastSound(\pocketmine\world\sound\Sound $sound, ?array $targets = null) : void{
+        if(!$this->isClosed()){
+            $this->getWorld()->addSound($this->getPosition(), $sound, $targets);
+        }
+    }
+
+    public function getWorldOrNull() : ?World{
+        return $this->isClosed() ? null : $this->getWorld();
+    }
+
     public function __toString() : string{
         return (new \ReflectionClass($this))->getShortName() . "(" . $this->runtimeId . ")";
     }

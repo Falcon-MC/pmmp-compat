@@ -1,20 +1,30 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol;
 
-use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\VarInt;
@@ -42,14 +52,14 @@ class InventoryTransactionPacket extends DataPacket implements ClientboundPacket
 
 	public int $requestId;
 	/** @var InventoryTransactionChangedSlotsHack[] */
-	public ?array $requestChangedSlots;
+	public array $requestChangedSlots;
 	public TransactionData $trData;
 
 	/**
 	 * @generate-create-func
 	 * @param InventoryTransactionChangedSlotsHack[] $requestChangedSlots
 	 */
-	public static function create(int $requestId, ?array $requestChangedSlots, TransactionData $trData) : self{
+	public static function create(int $requestId, array $requestChangedSlots, TransactionData $trData) : self{
 		$result = new self;
 		$result->requestId = $requestId;
 		$result->requestChangedSlots = $requestChangedSlots;
@@ -59,23 +69,17 @@ class InventoryTransactionPacket extends DataPacket implements ClientboundPacket
 
 	protected function decodePayload(ByteBufferReader $in) : void{
 		$this->requestId = CommonTypes::readLegacyItemStackRequestId($in);
+		$hasChangedSlots = CommonTypes::getBool($in);
 
-		$this->requestChangedSlots = CommonTypes::readOptional($in, static function(ByteBufferReader $in) : array{
-			$result = [];
+		$this->requestChangedSlots = [];
+		if($hasChangedSlots){
 			for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
-				$result[] = InventoryTransactionChangedSlotsHack::read($in);
+				$this->requestChangedSlots[] = InventoryTransactionChangedSlotsHack::read($in);
 			}
-			return $result;
-		});
+		}
 
-		if(Byte::readUnsigned($in) !== 1){
-			throw new PacketDecodeException("Dummy optional bool for transactionType should always be 1");
-		}
 		$transactionType = VarInt::readUnsignedInt($in);
-		if(Byte::readUnsigned($in) !== 1){
-			throw new PacketDecodeException("Dummy optional bool for trData should always be 1");
-		}
-		$this->trData = match($transactionType) {
+		$this->trData = match($transactionType){
 			NormalTransactionData::ID => new NormalTransactionData(),
 			MismatchTransactionData::ID => new MismatchTransactionData(),
 			UseItemTransactionData::ID => new UseItemTransactionData(),
@@ -83,23 +87,23 @@ class InventoryTransactionPacket extends DataPacket implements ClientboundPacket
 			ReleaseItemTransactionData::ID => new ReleaseItemTransactionData(),
 			default => throw new PacketDecodeException("Unknown transaction type $transactionType"),
 		};
-		$this->trData->decodeTransaction($in);
+
+		$this->trData->decode($in);
 	}
 
 	protected function encodePayload(ByteBufferWriter $out) : void{
 		CommonTypes::writeLegacyItemStackRequestId($out, $this->requestId);
-
-		CommonTypes::writeOptional($out, $this->requestChangedSlots, static function(ByteBufferWriter $out, array $value) : void{
-			VarInt::writeUnsignedInt($out, count($value));
-			foreach($value as $changedSlots){
+		CommonTypes::putBool($out, $hasChangedSlots = $this->requestId !== 0);
+		if($hasChangedSlots){
+			VarInt::writeUnsignedInt($out, count($this->requestChangedSlots));
+			foreach($this->requestChangedSlots as $changedSlots){
 				$changedSlots->write($out);
 			}
-		});
+		}
 
-		Byte::writeUnsigned($out, 1);
 		VarInt::writeUnsignedInt($out, $this->trData->getTypeId());
-		Byte::writeUnsigned($out, 1);
-		$this->trData->encodeTransaction($out);
+
+		$this->trData->encode($out);
 	}
 
 	public function handle(PacketHandlerInterface $handler) : bool{

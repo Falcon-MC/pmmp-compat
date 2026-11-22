@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -22,6 +33,7 @@ final class LevelSoundEvent{
 	private function __construct(){
 		//NOOP
 	}
+
 	public const ITEM_USE_ON = "item.use.on";
 	public const HIT = "hit";
 	public const STEP = "step";
@@ -135,7 +147,7 @@ final class LevelSoundEvent{
 	public const RECORD_WARD = "record.ward";
 	public const RECORD_11 = "record.11";
 	public const RECORD_WAIT = "record.wait";
-	public const RECORD_NULL = "record.null";
+	public const STOP_RECORD = "record.null";
 	public const FLOP = "flop";
 	public const ELDERGUARDIAN_CURSE = "elderguardian.curse";
 	public const MOB_WARNING = "mob.warning";
@@ -593,5 +605,8 @@ final class LevelSoundEvent{
 	public const BUCKET_EMPTY_LAND_ANIMAL = "bucket.empty.land_animal";
 	public const GEYSER_CONTINUOUS_ERUPTION_START = "geyser_continuous_eruption_start";
 	public const GEYSER_CONTINUOUS_ERUPTION_ACTIVE = "geyser_continuous_eruption_active";
-
+	public const MOUNT = "mount";
+	public const DISMOUNT = "dismount";
+	public const STRAW_BED_BREAK_LEAVE = "straw_bed.break_leave";
+	public const ICE_BALL_BREAK = "ice_ball.break";
 }

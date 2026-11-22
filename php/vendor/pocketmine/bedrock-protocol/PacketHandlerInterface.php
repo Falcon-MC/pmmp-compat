@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -475,4 +486,24 @@ interface PacketHandlerInterface{
 	public function handleSendPartyDestinationCookie(SendPartyDestinationCookiePacket $packet) : bool;
 
 	public function handlePartyDestinationCookieResponse(PartyDestinationCookieResponsePacket $packet) : bool;
+
+	public function handleSetPlayerFurnaceOptions(SetPlayerFurnaceOptionsPacket $packet) : bool;
+
+	public function handleRecordStarted(RecordStartedPacket $packet) : bool;
+
+	public function handleClientboundMatchmakingState(ClientboundMatchmakingStatePacket $packet) : bool;
+
+	public function handleClientboundStonecutterSetRecipe(ClientboundStonecutterSetRecipePacket $packet) : bool;
+
+	public function handleServerboundStonecutterSetRecipe(ServerboundStonecutterSetRecipePacket $packet) : bool;
+
+	public function handleServerboundMatchmakingCancel(ServerboundMatchmakingCancelPacket $packet) : bool;
+
+	public function handleSetPassengerOfBlock(SetPassengerOfBlockPacket $packet) : bool;
+
+	public function handleServerboundCursorItemDrag(ServerboundCursorItemDragPacket $packet) : bool;
+
+	public function handleClientboundPlayAudioContent(ClientboundPlayAudioContentPacket $packet) : bool;
+
+	public function handleServerboundRegisterAudioContent(ServerboundRegisterAudioContentPacket $packet) : bool;
 }

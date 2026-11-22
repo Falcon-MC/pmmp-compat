@@ -48,7 +48,7 @@ final class VanillaItems{
             if($identifier !== "minecraft:air" && !falcon_item_exists($identifier)){
                 return null;
             }
-            self::$prototypes[$identifier] = new Item($identifier);
+            self::$prototypes[$identifier] = \pmmpcompat\ItemTypes::create($identifier);
         }
         return clone self::$prototypes[$identifier];
     }

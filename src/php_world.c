@@ -22,7 +22,7 @@ static void return_vector(zval *return_value, FalconVec3 vector) {
 }
 
 // an item as PHP keeps it: identifier, count, damage and its little-endian NBT
-static void item_to_array(FalconItem *item, zval *out) {
+void item_to_array(FalconItem *item, zval *out) {
     array_init_size(out, 4);
     add_assoc_string(out, "id", falcon->itemIdentifier(item) != NULL ? falcon->itemIdentifier(item) : "minecraft:air");
     add_assoc_long(out, "count", (zend_long) falcon->itemCount(item));
@@ -33,7 +33,7 @@ static void item_to_array(FalconItem *item, zval *out) {
 }
 
 // an owned FalconItem the caller destroys, NULL for an unknown identifier
-static FalconItem *item_from_array(HashTable *data) {
+FalconItem *item_from_array(HashTable *data) {
     zval *id = zend_hash_str_find(data, "id", sizeof("id") - 1);
     zval *count = zend_hash_str_find(data, "count", sizeof("count") - 1);
     if (id == NULL || Z_TYPE_P(id) != IS_STRING)
@@ -353,6 +353,8 @@ PHP_FUNCTION(falcon_entity_info) {
     const char *tag = falcon->entityNameTag(target);
     add_assoc_string(return_value, "nameTag", tag != NULL ? tag : "");
     add_assoc_long(return_value, "player", TO_LONG(falcon->entityPlayer(target)));
+    add_assoc_bool(return_value, "onFire", falcon->entityIsOnFire(target) != 0);
+    add_assoc_bool(return_value, "invisible", FALCON_HAS(entityIsInvisible) && falcon->entityIsInvisible(target) != 0);
 }
 
 PHP_FUNCTION(falcon_entity_teleport) {

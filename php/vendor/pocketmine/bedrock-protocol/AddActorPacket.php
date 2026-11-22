@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -24,6 +35,7 @@ use pocketmine\network\mcpe\protocol\types\entity\Attribute;
 use pocketmine\network\mcpe\protocol\types\entity\EntityLink;
 use pocketmine\network\mcpe\protocol\types\entity\MetadataProperty;
 use pocketmine\network\mcpe\protocol\types\entity\PropertySyncData;
+use pocketmine\network\mcpe\protocol\types\PassengerOfBlockArguments;
 use function count;
 
 class AddActorPacket extends DataPacket implements ClientboundPacket{
@@ -49,6 +61,7 @@ class AddActorPacket extends DataPacket implements ClientboundPacket{
 	public PropertySyncData $syncedProperties;
 	/** @var EntityLink[] */
 	public array $links = [];
+	public ?PassengerOfBlockArguments $passengerOfBlockData = null;
 
 	/**
 	 * @generate-create-func
@@ -71,6 +84,7 @@ class AddActorPacket extends DataPacket implements ClientboundPacket{
 		array $metadata,
 		PropertySyncData $syncedProperties,
 		array $links,
+		?PassengerOfBlockArguments $passengerOfBlockData,
 	) : self{
 		$result = new self;
 		$result->actorUniqueId = $actorUniqueId;
@@ -86,6 +100,7 @@ class AddActorPacket extends DataPacket implements ClientboundPacket{
 		$result->metadata = $metadata;
 		$result->syncedProperties = $syncedProperties;
 		$result->links = $links;
+		$result->passengerOfBlockData = $passengerOfBlockData;
 		return $result;
 	}
 
@@ -116,6 +131,7 @@ class AddActorPacket extends DataPacket implements ClientboundPacket{
 		for($i = 0; $i < $linkCount; ++$i){
 			$this->links[] = CommonTypes::getEntityLink($in);
 		}
+		$this->passengerOfBlockData = CommonTypes::readOptional($in, PassengerOfBlockArguments::read(...));
 	}
 
 	protected function encodePayload(ByteBufferWriter $out) : void{
@@ -144,6 +160,7 @@ class AddActorPacket extends DataPacket implements ClientboundPacket{
 		foreach($this->links as $link){
 			CommonTypes::putEntityLink($out, $link);
 		}
+		CommonTypes::writeOptional($out, $this->passengerOfBlockData, fn(ByteBufferWriter $out, PassengerOfBlockArguments $data) => $data->write($out));
 	}
 
 	public function handle(PacketHandlerInterface $handler) : bool{

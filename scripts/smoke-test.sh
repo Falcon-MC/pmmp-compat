@@ -80,7 +80,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "12 PocketMine-MP plugins loaded, 9 could not be"
+expect "13 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -153,7 +153,7 @@ expect "fixture: Explorer saw Visitor die"
 
 # packets, forms, a player's connection and the entity register
 expect "fixture: Courier registered its npc as courier:npc"
-expect "fixture: Courier packet round trips, protocol 1.26.30, pool ready"
+expect "fixture: Courier packet round trips, protocol 1.26.60, pool ready"
 expect "fixture: Courier sees Visitor with uuid set and protocol known"
 expect "fixture: Courier sent a form and a packet: sent"
 
@@ -165,6 +165,19 @@ expect "fixture: Shopkeeper saw Menu open"
 expect "fixture: Shopkeeper menu opened"
 expect "fixture: Shopkeeper menu holds 2 emeralds before closing"
 expect "fixture: Shopkeeper saw Menu close"
+
+# the rest of the world: typed items and blocks, tiles, effects, hunger, experience, sounds, drops and the server
+expect "fixture: Wanderer 15 of 15 checks passed"
+expect "fixture: Wanderer saw a chunk load in"
+expect "fixture: Wanderer saw Visitor get effect potion.moveSpeed 2"
+expect "fixture: Wanderer gave speed: running"
+expect "fixture: Wanderer took speed away: gone"
+expect "fixture: Wanderer food 15 of 20"
+expect "fixture: Wanderer xp level 3"
+expect "fixture: Wanderer skin known"
+expect "fixture: Wanderer played a sound and a particle"
+expect "fixture: Wanderer death drops"
+expect "fixture: Wanderer kept Blade after death"
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

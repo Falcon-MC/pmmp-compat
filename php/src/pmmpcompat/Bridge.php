@@ -100,8 +100,9 @@ final class Bridge{
     private const INVENTORY_CLOSE = 18;
     private const INVENTORY_TRANSACTION = 19;
 
-    /** what the runtime always listens to: it keeps its players and forms with them */
-    private const ALWAYS = [self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_FORM_RESPONSE, self::INVENTORY_TRANSACTION];
+    /** what the runtime always listens to: it keeps its players, their forms, and whether they sneak, sprint or fly */
+    private const ALWAYS = [self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_FORM_RESPONSE, self::INVENTORY_TRANSACTION,
+        self::PLAYER_TOGGLE_SNEAK, self::PLAYER_TOGGLE_SPRINT, self::PLAYER_TOGGLE_FLIGHT];
 
     /** the PocketMine-MP events each Falcon event becomes; Falcon passes it once a listener wants one of them */
     private const SOURCES = [
@@ -158,7 +159,7 @@ final class Bridge{
      * now on, a listener for a parent class such as PlayerEvent taking all of its children's
      */
     public static function listenFor(string $eventClass) : void{
-        foreach(self::SOURCES as $type => $classes){
+        foreach(self::SOURCES + WorldEvents::SOURCES as $type => $classes){
             foreach($classes as $class){
                 if(is_a($class, $eventClass, true)){
                     self::listenTo($type);
@@ -317,17 +318,30 @@ final class Bridge{
                 $cause = DamageCauses::fromFalcon(falcon_event_cause($handle));
                 $amount = falcon_event_amount($handle);
                 $attackerHandle = falcon_event_attacker($handle);
+                $knockback = falcon_event_knockback($handle);
                 $event = $attackerHandle !== 0
-                    ? new EntityDamageByEntityEvent(Entities::get($attackerHandle), $entity, $cause, $amount)
+                    ? new EntityDamageByEntityEvent(Entities::get($attackerHandle), $entity, $cause, $amount, [],
+                        $knockback[0] ?? Living::DEFAULT_KNOCKBACK_FORCE, $knockback[1] ?? Living::DEFAULT_KNOCKBACK_VERTICAL_LIMIT)
                     : new EntityDamageEvent($entity, $cause, $amount);
                 $entity->setLastDamageCause($event);
-                return self::state($event, $message, $handle) + ['amount' => $amount];
+                return self::state($event, $message, $handle) + ['amount' => $amount, 'knockback' => $knockback];
             case self::ENTITY_DEATH:
                 $entity = self::eventEntity($handle);
-                return $entity instanceof Living && !$entity instanceof Player
-                    ? self::state(new EntityDeathEvent($entity), $message, $handle) : null;
+                if(!$entity instanceof Living || $entity instanceof Player){
+                    return null;
+                }
+                [$drops, $xp] = self::drops($handle);
+                return self::state(new EntityDeathEvent($entity, $drops, $xp), $message, $handle) + self::dropState($handle);
             case self::PLAYER_DEATH:
-                return $player === null ? null : self::state(new PlayerDeathEvent($player, [], 0, $message), $message, $handle);
+                if($player === null){
+                    return null;
+                }
+                [$drops, $xp] = self::drops($handle);
+                $event = new PlayerDeathEvent($player, $drops, $xp, $message);
+                [$keepInventory, $keepXp] = falcon_event_keep($handle);
+                $event->setKeepInventory($keepInventory);
+                $event->setKeepXp($keepXp);
+                return self::state($event, $message, $handle) + self::dropState($handle) + ['keep' => [$keepInventory, $keepXp]];
             case self::PLAYER_RESPAWN:
                 if($player === null){
                     return null;
@@ -356,8 +370,9 @@ final class Bridge{
                     return null;
                 }
                 $block = self::eventBlock($handle, $player, true);
+                [$drops, $xp] = self::drops($handle);
                 return self::state(new BlockBreakEvent($player, $block, $player->getInventory()->getItemInHand(),
-                    $player->isCreative()), $message, $handle);
+                    $player->isCreative(), $drops, $xp), $message, $handle) + self::dropState($handle);
             case self::BLOCK_PLACE:
                 if($player === null){
                     return null;
@@ -419,7 +434,8 @@ final class Bridge{
                 $text = new SignText(explode("\n", $message));
                 return self::state(new SignChangeEvent($sign, $player, $text, falcon_event_state($handle)), $message, $handle);
         }
-        return null;
+        $created = WorldEvents::create($type, $handle, $player);
+        return $created === null ? null : self::state($created['event'], $message, $handle) + $created;
     }
 
     /**
@@ -498,6 +514,35 @@ final class Bridge{
         return $world->getBlockAt($x, $y, $z);
     }
 
+    /**
+     * What the event drops, as items, and its experience.
+     * @return array{Item[], int}
+     */
+    private static function drops(int $handle) : array{
+        $drops = array_map(static fn(array $data) : Item => Item::fromFalcon($data), falcon_event_drops($handle) ?? []);
+        return [$drops, falcon_event_experience($handle)];
+    }
+
+    /** what the drops were as Falcon gave them, to tell a change from none */
+    private static function dropState(int $handle) : array{
+        return ['drops' => falcon_event_drops($handle), 'xp' => falcon_event_experience($handle)];
+    }
+
+    /** the drops and experience a listener set go back to Falcon */
+    private static function applyDrops(int $handle, array &$state, array $drops, int $xp) : void{
+        if($state['drops'] !== null){
+            $raw = array_values(array_map(static fn(Item $item) : array => $item->toFalcon(), array_filter($drops, static fn(Item $item) : bool => !$item->isNull())));
+            if($raw !== $state['drops']){
+                falcon_event_set_drops($handle, $raw);
+                $state['drops'] = $raw;
+            }
+        }
+        if($xp !== $state['xp']){
+            falcon_event_set_experience($handle, $xp);
+            $state['xp'] = $xp;
+        }
+    }
+
     /** @return array{event: Event, message: string, recipients: object[], sender: ?object} */
     private static function state(Event $event, string $message, int $handle) : array{
         // cancelled already when a Falcon plugin listening below LOWEST did
@@ -555,6 +600,19 @@ final class Bridge{
         if($event instanceof Cancellable){
             falcon_event_set_cancelled($handle, $event->isCancelled());
         }
+        if(isset(WorldEvents::SOURCES[$type])){
+            WorldEvents::apply($handle, $state, $last);
+            return;
+        }
+        if($last && !($event instanceof Cancellable && $event->isCancelled())){
+            if($event instanceof PlayerToggleSneakEvent){
+                $event->getPlayer()->onToggledByFalcon(sneaking: $event->isSneaking());
+            }elseif($event instanceof PlayerToggleSprintEvent){
+                $event->getPlayer()->onToggledByFalcon(sprinting: $event->isSprinting());
+            }elseif($event instanceof PlayerToggleFlightEvent){
+                $event->getPlayer()->onToggledByFalcon(flying: $event->isFlying());
+            }
+        }
         if($event instanceof PlayerJoinEvent){
             self::applyMessage($handle, $state, self::text($event->getJoinMessage()));
         }elseif($event instanceof PlayerQuitEvent){
@@ -580,8 +638,25 @@ final class Bridge{
                 falcon_event_set_amount($handle, $amount);
                 $state['amount'] = $amount;
             }
+            if($event instanceof EntityDamageByEntityEvent && $state['knockback'] !== null){
+                $knockback = [$event->getKnockBack(), $event->getVerticalKnockBackLimit()];
+                if($knockback !== $state['knockback']){
+                    falcon_event_set_knockback($handle, $knockback[0], $knockback[1]);
+                    $state['knockback'] = $knockback;
+                }
+            }
         }elseif($event instanceof PlayerDeathEvent){
             self::applyMessage($handle, $state, self::text($event->getDeathMessage()));
+            self::applyDrops($handle, $state, $event->getDrops(), $event->getXpDropAmount());
+            $keep = [$event->getKeepInventory(), $event->getKeepXp()];
+            if($keep !== $state['keep']){
+                falcon_event_set_keep($handle, $keep[0], $keep[1]);
+                $state['keep'] = $keep;
+            }
+        }elseif($event instanceof EntityDeathEvent){
+            self::applyDrops($handle, $state, $event->getDrops(), $event->getXpDropAmount());
+        }elseif($event instanceof BlockBreakEvent){
+            self::applyDrops($handle, $state, $event->getDrops(), $event->getXpDropAmount());
         }elseif($event instanceof DataPacketSendEvent && $last && !$event->isCancelled() && $event->getPackets() !== $state['packets']){
             // other packets in its place: they go out here, the one Falcon held does not
             falcon_event_set_cancelled($handle, true);

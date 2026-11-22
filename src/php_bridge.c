@@ -524,6 +524,10 @@ extern zend_module_entry encoding_module_entry;
 static PHP_MINIT_FUNCTION(falcon) {
     if (zend_register_functions(NULL, falcon_world_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
         return FAILURE;
+    if (zend_register_functions(NULL, falcon_living_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
+        return FAILURE;
+    if (zend_register_functions(NULL, falcon_server_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
+        return FAILURE;
     return encoding_module_entry.module_startup_func(type, module_number);
 }
 

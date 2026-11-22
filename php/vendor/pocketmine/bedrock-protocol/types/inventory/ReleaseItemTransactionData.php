@@ -1,19 +1,31 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory;
 
+use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\VarInt;
@@ -21,6 +33,7 @@ use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
+use pocketmine\network\mcpe\protocol\types\HandSlot;
 
 class ReleaseItemTransactionData extends TransactionData{
 	use GetTypeIdFromConstTrait;
@@ -34,6 +47,7 @@ class ReleaseItemTransactionData extends TransactionData{
 	private int $hotbarSlot;
 	private ItemStackWrapper $itemInHand;
 	private Vector3 $headPosition;
+	private HandSlot $handSlot;
 
 	public function getActionType() : int{
 		return $this->actionType;
@@ -51,37 +65,44 @@ class ReleaseItemTransactionData extends TransactionData{
 		return $this->headPosition;
 	}
 
+	public function getHandSlot() : HandSlot{
+		return $this->handSlot;
+	}
+
 	protected function decodeData(ByteBufferReader $in) : void{
-		$this->actionType = VarInt::readSignedInt($in);
+		$this->actionType = VarInt::readUnsignedInt($in);
 		$this->hotbarSlot = VarInt::readSignedInt($in);
 		$this->itemInHand = CommonTypes::getNetworkItemStackDescriptor($in);
 		$this->headPosition = CommonTypes::getVector3($in);
+		$this->handSlot = HandSlot::fromPacket(Byte::readUnsigned($in));
 	}
 
 	protected function encodeData(ByteBufferWriter $out) : void{
-		VarInt::writeSignedInt($out, $this->actionType);
+		VarInt::writeUnsignedInt($out, $this->actionType);
 		VarInt::writeSignedInt($out, $this->hotbarSlot);
 		CommonTypes::putNetworkItemStackDescriptor($out, $this->itemInHand);
 		CommonTypes::putVector3($out, $this->headPosition);
+		Byte::writeUnsigned($out, $this->handSlot->value);
 	}
 
 	/**
 	 * @generate-create-func
 	 */
-	private static function initSelf(int $actionType, int $hotbarSlot, ItemStackWrapper $itemInHand, Vector3 $headPosition) : self{
+	private static function initSelf(int $actionType, int $hotbarSlot, ItemStackWrapper $itemInHand, Vector3 $headPosition, HandSlot $handSlot) : self{
 		$result = new self;
 		$result->actionType = $actionType;
 		$result->hotbarSlot = $hotbarSlot;
 		$result->itemInHand = $itemInHand;
 		$result->headPosition = $headPosition;
+		$result->handSlot = $handSlot;
 		return $result;
 	}
 
 	/**
 	 * @param NetworkInventoryAction[] $actions
 	 */
-	public static function new(array $actions, int $actionType, int $hotbarSlot, ItemStackWrapper $itemInHand, Vector3 $headPosition) : self{
-		$result = self::initSelf($actionType, $hotbarSlot, $itemInHand, $headPosition);
+	public static function new(array $actions, int $actionType, int $hotbarSlot, ItemStackWrapper $itemInHand, Vector3 $headPosition, HandSlot $handSlot) : self{
+		$result = self::initSelf($actionType, $hotbarSlot, $itemInHand, $headPosition, $handSlot);
 		$result->actions = $actions;
 		return $result;
 	}

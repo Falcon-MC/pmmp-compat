@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -18,6 +29,7 @@ use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\LE;
+use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 
 final class EntityDiagnosticTimingInfo{
@@ -27,6 +39,8 @@ final class EntityDiagnosticTimingInfo{
 		private string $entity,
 		private int $timeInNS,
 		private int $percentOfTotal,
+		private ?Vector3 $position,
+		private ?string $dimension
 	){}
 
 	public function getDisplayName() : string{ return $this->displayName; }
@@ -42,12 +56,16 @@ final class EntityDiagnosticTimingInfo{
 		$entity = CommonTypes::getString($in);
 		$timeInNS = LE::readUnsignedLong($in);
 		$percentOfTotal = Byte::readUnsigned($in);
+		$position = CommonTypes::readOptional($in, CommonTypes::getVector3(...));
+		$dimension = CommonTypes::readOptional($in, CommonTypes::getString(...));
 
 		return new self(
 			$displayName,
 			$entity,
 			$timeInNS,
-			$percentOfTotal
+			$percentOfTotal,
+			$position,
+			$dimension
 		);
 	}
 
@@ -56,5 +74,7 @@ final class EntityDiagnosticTimingInfo{
 		CommonTypes::putString($out, $this->entity);
 		LE::writeUnsignedLong($out, $this->timeInNS);
 		Byte::writeUnsigned($out, $this->percentOfTotal);
+		CommonTypes::writeOptional($out, $this->position, CommonTypes::putVector3(...));
+		CommonTypes::writeOptional($out, $this->dimension, CommonTypes::putString(...));
 	}
 }

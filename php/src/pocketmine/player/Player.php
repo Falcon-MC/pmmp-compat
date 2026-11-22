@@ -34,7 +34,7 @@ use pocketmine\utils\TextFormat;
  * The object lives on after the player leaves, as in PocketMine-MP: isOnline() turns false and what would reach the
  * player is dropped. Operators get the operator permissions, as op status gives them in PocketMine-MP.
  */
-class Player extends Human implements CommandSender{
+class Player extends Human implements CommandSender, IPlayer{
     use PermissibleDelegateTrait{
         hasPermission as private permissibleHasPermission;
         isPermissionSet as private permissibleIsPermissionSet;
@@ -284,8 +284,162 @@ class Player extends Human implements CommandSender{
         return $this->xuid !== "";
     }
 
+    private bool $sneaking = false;
+    private bool $sprinting = false;
+    private bool $flying = false;
+    private bool $allowFlight = false;
+    private int $viewDistance = 8;
+
+    /** @internal what the player toggled, once no listener refused it */
+    public function onToggledByFalcon(?bool $sneaking = null, ?bool $sprinting = null, ?bool $flying = null) : void{
+        $this->sneaking = $sneaking ?? $this->sneaking;
+        $this->sprinting = $sprinting ?? $this->sprinting;
+        $this->flying = $flying ?? $this->flying;
+    }
+
+    public function isSneaking() : bool{
+        return $this->sneaking;
+    }
+
+    public function setSneaking(bool $value = true) : void{
+        $this->sneaking = $value;
+    }
+
+    public function isSprinting() : bool{
+        return $this->sprinting;
+    }
+
+    public function setSprinting(bool $value = true) : void{
+        $this->sprinting = $value;
+    }
+
+    public function toggleSprint(bool $sprint) : bool{
+        $ev = new \pocketmine\event\player\PlayerToggleSprintEvent($this, $sprint);
+        $ev->call();
+        if($ev->isCancelled()){
+            return false;
+        }
+        $this->sprinting = $sprint;
+        return true;
+    }
+
+    public function isFlying() : bool{
+        return $this->flying || $this->isSpectator();
+    }
+
+    public function setFlying(bool $flying) : void{
+        $this->flying = $flying;
+    }
+
+    public function getAllowFlight() : bool{
+        return $this->allowFlight || $this->isCreative() || $this->isSpectator();
+    }
+
+    public function setAllowFlight(bool $value) : void{
+        $this->allowFlight = $value;
+    }
+
+    public function hasAutoJump() : bool{
+        return true;
+    }
+
+    public function setAutoJump(bool $value) : void{
+    }
+
+    public function getViewDistance() : int{
+        return $this->viewDistance;
+    }
+
+    public function setViewDistance(int $distance) : void{
+        $this->viewDistance = $distance;
+    }
+
+    /** the player goes to another server, as /transfer sends them */
+    public function transfer(string $address, int $port = 19132, Translatable|string|null $message = null) : bool{
+        if(!$this->online){
+            return false;
+        }
+        $ev = new \pocketmine\event\player\PlayerTransferEvent($this, $address, $port, $message ?? "transferred");
+        $ev->call();
+        if($ev->isCancelled()){
+            return false;
+        }
+        return falcon_player_transfer($this->handle, $ev->getAddress(), $ev->getPort());
+    }
+
+    /** where the player respawns: their bed or the point set for them, the world's spawn otherwise */
+    public function getSpawn() : \pocketmine\world\Position{
+        if($this->online){
+            $point = falcon_player_spawn_point($this->handle);
+            if($point !== null){
+                [$x, $y, $z] = $point;
+                return new \pocketmine\world\Position($x + 0.5, $y, $z + 0.5, $this->getWorld());
+            }
+        }
+        return $this->getWorld()->getSpawnLocation();
+    }
+
+    public function hasValidCustomSpawn() : bool{
+        return $this->online && falcon_player_spawn_point($this->handle) !== null;
+    }
+
+    public function setSpawn(?\pocketmine\math\Vector3 $pos) : void{
+        if(!$this->online){
+            return;
+        }
+        if($pos === null){
+            falcon_player_set_spawn_point($this->handle, 0, 0, 0, 0);
+            return;
+        }
+        $world = $pos instanceof \pocketmine\world\Position && $pos->isValid() ? $pos->getWorld() : $this->getWorld();
+        falcon_player_set_spawn_point($this->handle, $world->getHandle(), (int) floor($pos->x), (int) floor($pos->y), (int) floor($pos->z));
+    }
+
+    /** the language the player's game is set to, as en_US */
+    public function getLocale() : string{
+        return $this->online ? falcon_player_language($this->handle) : "en_US";
+    }
+
+    /** the device the player plays on, one of DeviceOS's numbers */
+    public function getDeviceOS() : int{
+        return $this->online ? falcon_player_device_os($this->handle) : -1;
+    }
+
+    public function getPing() : ?int{
+        return null;
+    }
+
+    public function getFirstPlayed() : ?int{
+        return null;
+    }
+
+    public function getLastPlayed() : ?int{
+        return null;
+    }
+
+    public function hasPlayedBefore() : bool{
+        return false;
+    }
+
+    public function getArmorPoints() : int{
+        return 0;
+    }
+
+    public function sendSound(string $sound, float $volume = 1.0, float $pitch = 1.0) : void{
+        if($this->online){
+            $pos = $this->getPosition();
+            falcon_player_play_sound($this->handle, $sound, $pos->x, $pos->y, $pos->z, $volume, $pitch);
+        }
+    }
+
     public function getLanguage() : Language{
         return $this->server->getLanguage();
+    }
+
+    public function setOp(bool $value) : void{
+        if($this->online){
+            falcon_player_set_operator($this->handle, $value);
+        }
     }
 
     public function isOp() : bool{

@@ -1,19 +1,31 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory;
 
+use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\VarInt;
@@ -21,6 +33,7 @@ use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
+use pocketmine\network\mcpe\protocol\types\HandSlot;
 
 class UseItemOnEntityTransactionData extends TransactionData{
 	use GetTypeIdFromConstTrait;
@@ -34,6 +47,7 @@ class UseItemOnEntityTransactionData extends TransactionData{
 	private int $actorRuntimeId;
 	private int $actionType;
 	private int $hotbarSlot;
+	private HandSlot $handSlot;
 	private ItemStackWrapper $itemInHand;
 	private Vector3 $playerPosition;
 	private Vector3 $clickPosition;
@@ -50,6 +64,10 @@ class UseItemOnEntityTransactionData extends TransactionData{
 		return $this->hotbarSlot;
 	}
 
+	public function getHandSlot() : HandSlot{
+		return $this->handSlot;
+	}
+
 	public function getItemInHand() : ItemStackWrapper{
 		return $this->itemInHand;
 	}
@@ -64,8 +82,9 @@ class UseItemOnEntityTransactionData extends TransactionData{
 
 	protected function decodeData(ByteBufferReader $in) : void{
 		$this->actorRuntimeId = CommonTypes::getActorRuntimeId($in);
-		$this->actionType = VarInt::readSignedInt($in);
+		$this->actionType = VarInt::readUnsignedInt($in);
 		$this->hotbarSlot = VarInt::readSignedInt($in);
+		$this->handSlot = HandSlot::fromPacket(Byte::readUnsigned($in));
 		$this->itemInHand = CommonTypes::getNetworkItemStackDescriptor($in);
 		$this->playerPosition = CommonTypes::getVector3($in);
 		$this->clickPosition = CommonTypes::getVector3($in);
@@ -73,8 +92,9 @@ class UseItemOnEntityTransactionData extends TransactionData{
 
 	protected function encodeData(ByteBufferWriter $out) : void{
 		CommonTypes::putActorRuntimeId($out, $this->actorRuntimeId);
-		VarInt::writeSignedInt($out, $this->actionType);
+		VarInt::writeUnsignedInt($out, $this->actionType);
 		VarInt::writeSignedInt($out, $this->hotbarSlot);
+		Byte::writeUnsigned($out, $this->handSlot->value);
 		CommonTypes::putNetworkItemStackDescriptor($out, $this->itemInHand);
 		CommonTypes::putVector3($out, $this->playerPosition);
 		CommonTypes::putVector3($out, $this->clickPosition);
@@ -83,11 +103,12 @@ class UseItemOnEntityTransactionData extends TransactionData{
 	/**
 	 * @generate-create-func
 	 */
-	private static function initSelf(int $actorRuntimeId, int $actionType, int $hotbarSlot, ItemStackWrapper $itemInHand, Vector3 $playerPosition, Vector3 $clickPosition) : self{
+	private static function initSelf(int $actorRuntimeId, int $actionType, int $hotbarSlot, HandSlot $handSlot, ItemStackWrapper $itemInHand, Vector3 $playerPosition, Vector3 $clickPosition) : self{
 		$result = new self;
 		$result->actorRuntimeId = $actorRuntimeId;
 		$result->actionType = $actionType;
 		$result->hotbarSlot = $hotbarSlot;
+		$result->handSlot = $handSlot;
 		$result->itemInHand = $itemInHand;
 		$result->playerPosition = $playerPosition;
 		$result->clickPosition = $clickPosition;
@@ -97,8 +118,8 @@ class UseItemOnEntityTransactionData extends TransactionData{
 	/**
 	 * @param NetworkInventoryAction[] $actions
 	 */
-	public static function new(array $actions, int $actorRuntimeId, int $actionType, int $hotbarSlot, ItemStackWrapper $itemInHand, Vector3 $playerPosition, Vector3 $clickPosition) : self{
-		$result = self::initSelf($actorRuntimeId, $actionType, $hotbarSlot, $itemInHand, $playerPosition, $clickPosition);
+	public static function new(array $actions, int $actorRuntimeId, int $actionType, int $hotbarSlot, HandSlot $handSlot, ItemStackWrapper $itemInHand, Vector3 $playerPosition, Vector3 $clickPosition) : self{
+		$result = self::initSelf($actorRuntimeId, $actionType, $hotbarSlot, $handSlot, $itemInHand, $playerPosition, $clickPosition);
 		$result->actions = $actions;
 		return $result;
 	}

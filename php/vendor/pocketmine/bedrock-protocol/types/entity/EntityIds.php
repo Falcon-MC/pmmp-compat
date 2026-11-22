@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -52,6 +63,7 @@ final class EntityIds{
 	public const COW = "minecraft:cow";
 	public const CREAKING = "minecraft:creaking";
 	public const CREEPER = "minecraft:creeper";
+	public const CUSHION = "minecraft:cushion";
 	public const DOLPHIN = "minecraft:dolphin";
 	public const DONKEY = "minecraft:donkey";
 	public const DRAGON_FIREBALL = "minecraft:dragon_fireball";
@@ -73,6 +85,7 @@ final class EntityIds{
 	public const FISHING_HOOK = "minecraft:fishing_hook";
 	public const FOX = "minecraft:fox";
 	public const FROG = "minecraft:frog";
+	public const FROSTBITE = "minecraft:frostbite";
 	public const GHAST = "minecraft:ghast";
 	public const GLOW_SQUID = "minecraft:glow_squid";
 	public const GOAT = "minecraft:goat";
@@ -82,6 +95,7 @@ final class EntityIds{
 	public const HOPPER_MINECART = "minecraft:hopper_minecart";
 	public const HORSE = "minecraft:horse";
 	public const HUSK = "minecraft:husk";
+	public const ICE_BALL = "minecraft:ice_ball";
 	public const ICE_BOMB = "minecraft:ice_bomb";
 	public const IRON_GOLEM = "minecraft:iron_golem";
 	public const ITEM = "minecraft:item";

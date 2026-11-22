@@ -1,13 +1,24 @@
 <?php
 
 /*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
  *
- * BedrockProtocol is free software: you can redistribute it and/or modify
+ *      _    _ _
+ *     / \  | | |_ __ _ _   _
+ *    / _ \ | | __/ _` | | | |
+ *   / ___ \| | || (_| | |_| |
+ *  /_/   \_\_|\__\__,_|\__, |
+ *                       |___/
+ *
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
+ *
+ * Original work by the PocketMine Team.
+ * https://www.pocketmine.net/
+ *
+ * @author Altay Team
+ * @link https://github.com/altayofficial
  */
 
 declare(strict_types=1);
@@ -25,6 +36,7 @@ use pocketmine\network\mcpe\protocol\types\entity\EntityLink;
 use pocketmine\network\mcpe\protocol\types\entity\MetadataProperty;
 use pocketmine\network\mcpe\protocol\types\entity\PropertySyncData;
 use pocketmine\network\mcpe\protocol\types\inventory\ItemStackWrapper;
+use pocketmine\network\mcpe\protocol\types\PassengerOfBlockArguments;
 use Ramsey\Uuid\UuidInterface;
 use function count;
 
@@ -53,6 +65,7 @@ class AddPlayerPacket extends DataPacket implements ClientboundPacket{
 
 	/** @var EntityLink[] */
 	public array $links = [];
+	public ?PassengerOfBlockArguments $passengerOfBlockData = null;
 	public string $deviceId = ""; //TODO: fill player's device ID (???)
 	public int $buildPlatform = DeviceOS::UNKNOWN;
 
@@ -78,6 +91,7 @@ class AddPlayerPacket extends DataPacket implements ClientboundPacket{
 		PropertySyncData $syncedProperties,
 		UpdateAbilitiesPacket $abilitiesPacket,
 		array $links,
+		?PassengerOfBlockArguments $passengerOfBlockData,
 		string $deviceId,
 		int $buildPlatform,
 	) : self{
@@ -97,6 +111,7 @@ class AddPlayerPacket extends DataPacket implements ClientboundPacket{
 		$result->syncedProperties = $syncedProperties;
 		$result->abilitiesPacket = $abilitiesPacket;
 		$result->links = $links;
+		$result->passengerOfBlockData = $passengerOfBlockData;
 		$result->deviceId = $deviceId;
 		$result->buildPlatform = $buildPlatform;
 		return $result;
@@ -112,7 +127,7 @@ class AddPlayerPacket extends DataPacket implements ClientboundPacket{
 		$this->pitch = LE::readFloat($in);
 		$this->yaw = LE::readFloat($in);
 		$this->headYaw = LE::readFloat($in);
-		$this->item = CommonTypes::getItemStackWrapper($in);
+		$this->item = CommonTypes::getNetworkItemStackDescriptor($in);
 		$this->gameMode = VarInt::readSignedInt($in);
 		$this->metadata = CommonTypes::getEntityMetadata($in);
 		$this->syncedProperties = PropertySyncData::read($in);
@@ -124,6 +139,8 @@ class AddPlayerPacket extends DataPacket implements ClientboundPacket{
 		for($i = 0; $i < $linkCount; ++$i){
 			$this->links[$i] = CommonTypes::getEntityLink($in);
 		}
+
+		$this->passengerOfBlockData = CommonTypes::readOptional($in, PassengerOfBlockArguments::read(...));
 
 		$this->deviceId = CommonTypes::getString($in);
 		$this->buildPlatform = LE::readSignedInt($in);
@@ -139,7 +156,7 @@ class AddPlayerPacket extends DataPacket implements ClientboundPacket{
 		LE::writeFloat($out, $this->pitch);
 		LE::writeFloat($out, $this->yaw);
 		LE::writeFloat($out, $this->headYaw);
-		CommonTypes::putItemStackWrapper($out, $this->item);
+		CommonTypes::putNetworkItemStackDescriptor($out, $this->item);
 		VarInt::writeSignedInt($out, $this->gameMode);
 		CommonTypes::putEntityMetadata($out, $this->metadata);
 		$this->syncedProperties->write($out);
@@ -150,6 +167,8 @@ class AddPlayerPacket extends DataPacket implements ClientboundPacket{
 		foreach($this->links as $link){
 			CommonTypes::putEntityLink($out, $link);
 		}
+
+		CommonTypes::writeOptional($out, $this->passengerOfBlockData, fn(ByteBufferWriter $out, PassengerOfBlockArguments $data) => $data->write($out));
 
 		CommonTypes::putString($out, $this->deviceId);
 		LE::writeSignedInt($out, $this->buildPlatform);
