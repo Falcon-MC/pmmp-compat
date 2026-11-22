@@ -1,0 +1,12 @@
+{
+  "name": "pmmp-compat",
+  "version": "0.1.0",
+  "api-version": "1.0",
+  "main": "PmmpCompat",
+  "runtime": "native",
+  "authors": ["Falcon-MC"],
+  "description": "Runs PocketMine-MP plugins on Falcon",
+  "depend": [],
+  "softdepend": [],
+  "loadbefore": []
+}
