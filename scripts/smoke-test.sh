@@ -71,7 +71,11 @@ expect "Intruder': Invalid plugin manifest: Invalid Plugin main, cannot start wi
 expect "Could not enable plugin 'Crashing': boom"
 expect "fixture: Crashing cleaned up"
 expect "Could not enable plugin 'Quitter': Plugin disabled itself when attempting to enable it"
-expect "6 PocketMine-MP plugins loaded, 8 could not be"
+expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
+expect "fixture: FatalEnable enabling"
+expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
+expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
+expect "6 PocketMine-MP plugins loaded, 9 could not be"
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

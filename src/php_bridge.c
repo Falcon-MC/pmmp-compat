@@ -3,6 +3,7 @@
 
 #include <php_embed.h>
 #include <zend_exceptions.h>
+#include <zend_gc.h>
 #include <zend_stream.h>
 
 #include <stdlib.h>
@@ -47,9 +48,89 @@ PHP_FUNCTION(falcon_plugin_folder) {
     RETURN_STRING(plugin_folder != NULL ? plugin_folder : "");
 }
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_falcon_guard, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, callback, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+// what a fatal error leaves behind: it unwinds straight here, past every frame the callback pushed
+struct guard_state {
+    zend_execute_data *execute_data;
+    zend_vm_stack stack;
+    zval *stack_top;
+    zval *stack_end;
+    zend_class_entry *fake_scope;
+    int error_reporting;
+    bool autoloading;
+};
+
+static void guard_save(struct guard_state *state) {
+    state->execute_data = EG(current_execute_data);
+    state->stack = EG(vm_stack);
+    state->stack_top = EG(vm_stack_top);
+    state->stack_end = EG(vm_stack_end);
+    state->fake_scope = EG(fake_scope);
+    state->error_reporting = EG(error_reporting);
+    state->autoloading = EG(in_autoload) != NULL && zend_hash_num_elements(EG(in_autoload)) > 0;
+}
+
+static void guard_restore(const struct guard_state *state) {
+    // the frames above ours are dropped with what they held: a leak, the price of going on
+    while (EG(vm_stack) != state->stack && EG(vm_stack) != NULL) {
+        zend_vm_stack page = EG(vm_stack);
+        EG(vm_stack) = page->prev;
+        efree(page);
+    }
+    EG(vm_stack_top) = state->stack_top;
+    EG(vm_stack_end) = state->stack_end;
+    EG(current_execute_data) = state->execute_data;
+    EG(fake_scope) = state->fake_scope;
+    EG(error_reporting) = state->error_reporting;
+    // a class whose autoload died would otherwise never be looked for again
+    if (!state->autoloading && EG(in_autoload) != NULL)
+        zend_hash_clean(EG(in_autoload));
+    EG(exit_status) = 0;
+    CG(unclean_shutdown) = 0;
+    gc_protect(0);
+}
+
+// falcon_guard(callback): false when a fatal error or exit() stopped the callback; exceptions pass through
+PHP_FUNCTION(falcon_guard) {
+    zend_fcall_info call;
+    zend_fcall_info_cache cache;
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_FUNC(call, cache)
+    ZEND_PARSE_PARAMETERS_END();
+
+    struct guard_state state;
+    guard_save(&state);
+    zval result;
+    ZVAL_UNDEF(&result);
+    call.retval = &result;
+    bool completed = true;
+    zend_try {
+        zend_call_function(&call, &cache);
+    } zend_catch {
+        completed = false;
+    } zend_end_try();
+
+    if (!completed) {
+        guard_restore(&state);
+        RETURN_FALSE;
+    }
+    zval_ptr_dtor(&result);
+    // exit() unwinds as an exception nothing can catch, which would end the server's PHP
+    if (EG(exception) != NULL && zend_is_unwind_exit(EG(exception))) {
+        zend_clear_exception();
+        EG(exit_status) = 0;
+        RETURN_FALSE;
+    }
+    RETURN_TRUE;
+}
+
 static const zend_function_entry falcon_functions[] = {
     PHP_FE(falcon_log, arginfo_falcon_log)
     PHP_FE(falcon_plugin_folder, arginfo_falcon_plugin_folder)
+    PHP_FE(falcon_guard, arginfo_falcon_guard)
     PHP_FE_END
 };
 

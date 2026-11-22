@@ -1,0 +1,4 @@
+name: FatalLoad
+version: 1.0.0
+main: fatalload\Main
+api: 5.0.0

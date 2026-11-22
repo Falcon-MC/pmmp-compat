@@ -14,6 +14,8 @@ use pmmpcompat\Log;
  * load either needs a missing plugin or is part of a cycle.
  */
 class PluginManager{
+    private const FATAL = 'a fatal error or exit() stopped it, see above';
+
     /** @var Plugin[] by name, in load order */
     private array $plugins = [];
     /** @var Plugin[] by name, in enable order */
@@ -248,24 +250,35 @@ class PluginManager{
         $loader->loadPlugin($prefixed);
 
         $mainClass = $description->getMain();
+        $plugin = null;
+        $problem = null;
         try{
-            if(!class_exists($mainClass, true)){
-                Log::critical("Could not load plugin '$name': Main class not found");
-                return null;
-            }
-            if(!is_a($mainClass, Plugin::class, true)){
-                Log::critical("Could not load plugin '$name': Main class is not an instance of " . Plugin::class);
-                return null;
-            }
-            if(!(new \ReflectionClass($mainClass))->isInstantiable()){
-                Log::critical("Could not load plugin '$name': Main class must not be abstract");
-                return null;
-            }
-            // onLoad() runs inside the constructor
-            $plugin = new $mainClass($loader, null, $description, $dataFolder, $prefixed);
+            $build = static function() use ($mainClass, $loader, $description, $dataFolder, $prefixed, &$plugin,
+                &$problem) : void{
+                if(!class_exists($mainClass, true)){
+                    $problem = 'Main class not found';
+                }elseif(!is_a($mainClass, Plugin::class, true)){
+                    $problem = 'Main class is not an instance of ' . Plugin::class;
+                }elseif(!(new \ReflectionClass($mainClass))->isInstantiable()){
+                    $problem = 'Main class must not be abstract';
+                }else{
+                    // onLoad() runs inside the constructor
+                    $plugin = new $mainClass($loader, null, $description, $dataFolder, $prefixed);
+                }
+            };
+            // a missing trait or parent class is a fatal error, not an exception
+            $completed = falcon_guard($build);
         }catch(\Throwable $e){
             Log::critical("Could not load plugin '$name': " . $e->getMessage());
             Log::exception($e);
+            return null;
+        }
+        if(!$completed){
+            Log::critical("Could not load plugin '$name': " . self::FATAL);
+            return null;
+        }
+        if($problem !== null || !$plugin instanceof Plugin){
+            Log::critical("Could not load plugin '$name': " . ($problem ?? 'Main class not found'));
             return null;
         }
         $this->plugins[$name] = $plugin;
@@ -295,7 +308,11 @@ class PluginManager{
         $name = $description->getName();
         Log::info('Enabling ' . $description->getFullName());
         try{
-            $plugin->onEnableStateChange(true);
+            if(!falcon_guard(static fn() => $plugin->onEnableStateChange(true))){
+                Log::critical("Could not enable plugin '$name': " . self::FATAL);
+                $this->forget($plugin);
+                return false;
+            }
         }catch(DisablePluginException){
             $this->disablePlugin($plugin);
         }catch(\Throwable $e){
@@ -360,10 +377,25 @@ class PluginManager{
             }
         }
         try{
-            $plugin->onEnableStateChange(false);
+            if(!falcon_guard(static fn() => $plugin->onEnableStateChange(false))){
+                Log::critical("Error while disabling plugin '$name': " . self::FATAL);
+                $this->forget($plugin);
+            }
         }catch(\Throwable $e){
             Log::critical("Error while disabling plugin '$name': " . $e->getMessage());
             Log::exception($e);
+        }
+    }
+
+    /** a fatal error left the plugin in an unknown state: it is dropped, never called again */
+    private function forget(Plugin $plugin) : void{
+        $name = $plugin->getDescription()->getName();
+        unset($this->plugins[$name], $this->enabledPlugins[$name]);
+        foreach($this->pluginDependents as $dependency => $dependents){
+            unset($this->pluginDependents[$dependency][$name]);
+            if(count($this->pluginDependents[$dependency]) === 0){
+                unset($this->pluginDependents[$dependency]);
+            }
         }
     }
 }

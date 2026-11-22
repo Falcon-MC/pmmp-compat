@@ -1,0 +1,4 @@
+name: Exiter
+version: 1.0.0
+main: exiter\Main
+api: 5.0.0
