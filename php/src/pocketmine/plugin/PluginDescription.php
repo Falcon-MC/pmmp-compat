@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace pocketmine\plugin;
 
+use pocketmine\permission\Permission;
+use pocketmine\permission\PermissionParser;
+use pocketmine\permission\PermissionParserException;
+
 /** What a plugin's plugin.yml says about it */
 class PluginDescription{
     private const KEY_NAME = 'name';
@@ -61,6 +65,9 @@ class PluginDescription{
     private string $website = '';
     private string $prefix = '';
     private PluginEnableOrder $order;
+
+    /** @var Permission[][] by default: op, notop, true, false */
+    private array $permissions = [];
 
     /**
      * @param mixed[]|string $yamlString plugin.yml's text, or its parsed contents
@@ -175,6 +182,15 @@ class PluginDescription{
                 $this->authors[] = (string) $author;
             }
         }
+
+        if(isset($plugin[self::KEY_PERMISSIONS])){
+            try{
+                $this->permissions = PermissionParser::loadPermissions((array) $plugin[self::KEY_PERMISSIONS]);
+            }catch(PermissionParserException $e){
+                throw new PluginDescriptionParseException('Invalid Plugin "' . self::KEY_PERMISSIONS . '": '
+                    . $e->getMessage(), 0, $e);
+            }
+        }
     }
 
     public function getFullName() : string{
@@ -243,6 +259,11 @@ class PluginDescription{
 
     public function getOrder() : PluginEnableOrder{
         return $this->order;
+    }
+
+    /** @return Permission[][] by default: op, notop, true, false */
+    public function getPermissions() : array{
+        return $this->permissions;
     }
 
     /** @return string[] */

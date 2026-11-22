@@ -22,8 +22,8 @@ for phar in "$root"/tests/phar/*/; do
     "$python" "$root/scripts/make-phar.py" "$phar" "$plugin/plugins/$name.phar"
 done
 
-# the plugins are enabled before the console is read, so a stop waiting on stdin ends the run
-(cd "$work" && printf 'stop\n' | PMMP_COMPAT_SELFTEST=1 "$server" --no-wizard > server.log 2>&1) || true
+# the stop comes once the players test has run: it starts a second into the ticks
+(cd "$work" && (sleep 6; printf 'stop\n') | PMMP_COMPAT_SELFTEST=1 "$server" --no-wizard > server.log 2>&1) || true
 log="$work/server.log"
 cat "$log"
 
@@ -78,7 +78,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "7 PocketMine-MP plugins loaded, 9 could not be"
+expect "8 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -91,6 +91,26 @@ if grep -qF "logger debug stays hidden" "$log"; then
     echo "a debug message reached the log"
     failed=1
 fi
+
+# a simulated player meets the Greeter plugin: events at their priorities, commands, chat, the leave reason
+expect "fixture: Greeter listens, greet is registered"
+expect "fixture: Greeter saw Visitor join with \"§eVisitor joined the game\""
+expect "fixture: Greeter finds the same player, 1 online"
+expect "fixture: Greeter permissions: greet yes, secret no"
+expect "fixture: Greeter monitor sees \"§aWelcome Visitor\""
+expect "fixture: Greeter greeted Visitor as /greet hello world"
+expect "fixture: Greeter heard \"said through Player::chat\""
+expect "[Visitor] hi everyone!"
+expect "fixture: Greeter saw the cancelled \"a secret plan\""
+expect "fixture: Greeter greeted CONSOLE as /greet from the console"
+expect "Hello from the console"
+expect "fixture: Greeter saw Visitor leave: Bye from the test"
+for refused in "Greeter ran secret for Visitor" "[Visitor] a secret plan"; do
+    if grep -qF "$refused" "$log"; then
+        echo "should not be in the log: $refused"
+        failed=1
+    fi
+done
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

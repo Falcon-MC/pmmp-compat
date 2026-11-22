@@ -12,6 +12,8 @@ The archives are GitHub's tag tarballs (`https://codeload.github.com/symfony/<na
 symfony/yaml stands in for the yaml extension, which the server's PHP is built without. symfony/filesystem is the
 `Path` and `Filesystem` PocketMine-MP ships and plugins use.
 
-`php/src/log/`, `php/src/pocketmine/errorhandler/` and parts of `php/src/pocketmine/` come from PocketMine-MP 5.44.3,
+`php/src/log/`, `php/src/pocketmine/errorhandler/` and much of `php/src/pocketmine/` (events, commands, permissions,
+chat, translations, utils) come from PocketMine-MP 5.44.3,
 pocketmine/log 0.4.0 and pocketmine/errorhandler 0.7.1, under the LGPL v3 like this repository; their files keep their
-copyright notices.
+copyright notices. `php/resources/locale/eng.ini` is this repository's own: PocketMine-MP's translation strings are
+not bundled.

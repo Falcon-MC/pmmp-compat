@@ -4,16 +4,22 @@ declare(strict_types=1);
 
 namespace pocketmine\plugin;
 
-use pmmpcompat\Runtime;
+use pocketmine\command\Command;
+use pocketmine\command\CommandExecutor;
+use pocketmine\command\CommandSender;
+use pocketmine\command\PluginCommand;
+use pocketmine\lang\KnownTranslationFactory;
+use pocketmine\Server;
 use pocketmine\utils\Config;
 use Symfony\Component\Filesystem\Path;
 
 /**
- * The class a plugin's main class extends: its lifecycle, logger, data folder, config.yml and resources.
+ * The class a plugin's main class extends: its lifecycle, logger, data folder, config.yml, resources and the
+ * commands plugin.yml declares.
  *
- * Commands from plugin.yml, the scheduler and getServer() come with their own parts of the API.
+ * The scheduler comes with its own part of the API.
  */
-abstract class PluginBase implements Plugin{
+abstract class PluginBase implements Plugin, CommandExecutor{
     private bool $isEnabled = false;
 
     private string $resourceFolder;
@@ -23,12 +29,9 @@ abstract class PluginBase implements Plugin{
 
     private PluginLogger $logger;
 
-    /**
-     * @param mixed $server the server, once it exists in this runtime
-     */
     public function __construct(
         private PluginLoader $loader,
-        private mixed $server,
+        private Server $server,
         private PluginDescription $description,
         private string $dataFolder,
         private string $file,
@@ -41,9 +44,11 @@ abstract class PluginBase implements Plugin{
         $this->configFile = Path::join($this->dataFolder, 'config.yml');
 
         $prefix = $this->description->getPrefix();
-        $this->logger = new PluginLogger(Runtime::logger(), $prefix !== '' ? $prefix : $this->getName());
+        $this->logger = new PluginLogger($server->getLogger(), $prefix !== '' ? $prefix : $this->getName());
 
         $this->onLoad();
+
+        $this->registerYamlCommands();
     }
 
     /** called once the plugin is loaded, before any plugin is enabled */
@@ -86,6 +91,69 @@ abstract class PluginBase implements Plugin{
 
     public function getLogger() : \AttachableLogger{
         return $this->logger;
+    }
+
+    private function registerYamlCommands() : void{
+        $pluginCommands = [];
+        foreach($this->description->getCommands() as $key => $data){
+            if(str_contains($key, ':')){
+                $this->logger->error($this->server->getLanguage()->translate(
+                    KnownTranslationFactory::pocketmine_plugin_commandError($key, $this->description->getFullName(), ':')));
+                continue;
+            }
+
+            $command = new PluginCommand($key, $this, $this);
+            if(($description = $data->getDescription()) !== null){
+                $command->setDescription($description);
+            }
+            if(($usageMessage = $data->getUsageMessage()) !== null){
+                $command->setUsage($usageMessage);
+            }
+
+            $aliases = [];
+            foreach($data->getAliases() as $alias){
+                if(str_contains($alias, ':')){
+                    $this->logger->error($this->server->getLanguage()->translate(
+                        KnownTranslationFactory::pocketmine_plugin_aliasError($alias, $this->description->getFullName(), ':')));
+                    continue;
+                }
+                $aliases[] = $alias;
+            }
+            $command->setAliases($aliases);
+            $command->setPermission($data->getPermission());
+            if(($permissionDeniedMessage = $data->getPermissionDeniedMessage()) !== null){
+                $command->setPermissionMessage($permissionDeniedMessage);
+            }
+            $pluginCommands[] = $command;
+        }
+
+        if(count($pluginCommands) > 0){
+            $this->server->getCommandMap()->registerAll($this->description->getName(), $pluginCommands);
+        }
+    }
+
+    /**
+     * A command this plugin declared in plugin.yml, by its name or by its prefixed one.
+     *
+     * @return Command|PluginOwned|null
+     * @phpstan-return (Command&PluginOwned)|null
+     */
+    public function getCommand(string $name){
+        $command = $this->server->getPluginCommand($name);
+        if($command === null || $command->getOwningPlugin() !== $this){
+            $command = $this->server->getPluginCommand(strtolower($this->description->getName()) . ':' . $name);
+        }
+        if($command instanceof PluginOwned && $command->getOwningPlugin() === $this){
+            return $command;
+        }
+        return null;
+    }
+
+    /**
+     * @param string[] $args
+     */
+    public function onCommand(CommandSender $sender, Command $command, string $label, array $args) : bool{
+        return false;
     }
 
     public function getResourceFolder() : string{
@@ -155,6 +223,10 @@ abstract class PluginBase implements Plugin{
     public function reloadConfig() : void{
         $this->saveDefaultConfig();
         $this->config = new Config($this->configFile);
+    }
+
+    final public function getServer() : Server{
+        return $this->server;
     }
 
     final public function getName() : string{

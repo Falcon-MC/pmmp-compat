@@ -3,6 +3,7 @@
 #include <falcon/Falcon.hpp>
 
 #include <cstdlib>
+#include <optional>
 #include <filesystem>
 #include <string>
 
@@ -47,13 +48,18 @@ public:
             return false;
         }
         mStarted = true;
+        pmmp_php_set_falcon(&falcon::detail::api(), falcon::detail::plugin());
         logger().info(std::string("PHP ") + pmmp_php_version() + " (" + pmmp_php_threading() + ") started");
 
-        if (std::getenv("PMMP_COMPAT_SELFTEST") != nullptr)
+        const bool testing = std::getenv("PMMP_COMPAT_SELFTEST") != nullptr;
+        if (testing)
             selfTest(runtime);
 
         if (pmmp_php_run_file((runtime + "/bootstrap.php").c_str()) != 0)
             logger().error("the PocketMine-MP plugins did not all load: a fatal error stopped PHP");
+        pmmp_php_listen();
+        if (testing)
+            playersTest();
         return true;
     }
 
@@ -77,6 +83,31 @@ private:
             logger().error("PHP did not recover from the fatal error");
         logger().info("PHP memory: " + megabytes(pmmp_php_memory(0)) + " now, " + megabytes(pmmp_php_memory(1))
                       + " at most");
+    }
+
+    // a simulated player joins, runs commands, chats and is kicked, once the server ticks; the test plugins answer
+    void playersTest() {
+        scheduler().delay(20, [this] {
+            const std::optional<falcon::Level> level = falcon::Server::level(falcon::Dimension::Overworld);
+            if (!level) {
+                logger().error("players test: no overworld");
+                return;
+            }
+            const std::optional<falcon::Player> visitor =
+                    falcon::Server::spawnSimulatedPlayer("Visitor", *level, falcon::Vec3(0.5, 100.0, 0.5));
+            if (!visitor) {
+                logger().error("players test: the visitor was refused");
+                return;
+            }
+            visitor->executeCommand("greet hello world");
+            visitor->executeCommand("gr");
+            visitor->executeCommand("greet chat");
+            visitor->executeCommand("secret");
+            visitor->chat("hi everyone");
+            visitor->chat("a secret plan");
+            commands().execute("greet from the console");
+            visitor->kick("Bye from the test");
+        });
     }
 
     bool mStarted = false;

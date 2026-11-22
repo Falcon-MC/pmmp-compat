@@ -5,6 +5,22 @@ declare(strict_types=1);
 namespace pocketmine\plugin;
 
 use pmmpcompat\Log;
+use pocketmine\event\Cancellable;
+use pocketmine\event\Event;
+use pocketmine\event\EventPriority;
+use pocketmine\event\HandlerListManager;
+use pocketmine\event\Listener;
+use pocketmine\event\ListenerMethodTags;
+use pocketmine\event\plugin\PluginDisableEvent;
+use pocketmine\event\plugin\PluginEnableEvent;
+use pocketmine\event\RegisteredListener;
+use pocketmine\permission\DefaultPermissions;
+use pocketmine\permission\PermissionManager;
+use pocketmine\permission\PermissionParser;
+use pocketmine\Server;
+use pocketmine\timings\Timings;
+use pocketmine\utils\AssumptionFailedError;
+use pocketmine\utils\Utils;
 
 /**
  * Loads, enables and disables plugins, in the order their dependencies need.
@@ -27,7 +43,7 @@ class PluginManager{
     private bool $loadPluginsGuard = false;
 
     public function __construct(
-        private string $apiVersion,
+        private Server $server,
         private ?string $pluginDataDirectory
     ){
         if($pluginDataDirectory !== null && !is_dir($pluginDataDirectory)){
@@ -162,7 +178,7 @@ class PluginManager{
             $files = [];
         }
 
-        $checker = new PluginLoadabilityChecker($this->apiVersion);
+        $checker = new PluginLoadabilityChecker($this->server->getApiVersion());
         foreach($this->fileAssociations as $loader){
             foreach($files as $file){
                 $file = str_replace('\\', '/', $file);
@@ -249,12 +265,27 @@ class PluginManager{
         $prefixed = $loader->getAccessProtocol() . $path;
         $loader->loadPlugin($prefixed);
 
+        $permissions = PermissionManager::getInstance();
+        foreach($description->getPermissions() as $group){
+            foreach($group as $permission){
+                if($permissions->getPermission($permission->getName()) !== null){
+                    Log::critical("Could not load plugin '$name': Cannot redeclare permission '"
+                        . $permission->getName() . "'");
+                    return null;
+                }
+            }
+        }
+
+        // before the constructor: the commands plugin.yml declares need their permissions
+        $this->registerPermissions($description);
+
         $mainClass = $description->getMain();
+        $server = $this->server;
         $plugin = null;
         $problem = null;
         try{
-            $build = static function() use ($mainClass, $loader, $description, $dataFolder, $prefixed, &$plugin,
-                &$problem) : void{
+            $build = static function() use ($mainClass, $loader, $server, $description, $dataFolder, $prefixed,
+                &$plugin, &$problem) : void{
                 if(!class_exists($mainClass, true)){
                     $problem = 'Main class not found';
                 }elseif(!is_a($mainClass, Plugin::class, true)){
@@ -263,7 +294,7 @@ class PluginManager{
                     $problem = 'Main class must not be abstract';
                 }else{
                     // onLoad() runs inside the constructor
-                    $plugin = new $mainClass($loader, null, $description, $dataFolder, $prefixed,
+                    $plugin = new $mainClass($loader, $server, $description, $dataFolder, $prefixed,
                         new DiskResourceProvider($prefixed . '/resources/'));
                 }
             };
@@ -284,6 +315,34 @@ class PluginManager{
         }
         $this->plugins[$name] = $plugin;
         return $plugin;
+    }
+
+    // plugin.yml's permissions, hung under the roots their default names, as PocketMine-MP does
+    private function registerPermissions(PluginDescription $description) : void{
+        $permissions = PermissionManager::getInstance();
+        $operators = $permissions->getPermission(DefaultPermissions::ROOT_OPERATOR);
+        $everyone = $permissions->getPermission(DefaultPermissions::ROOT_USER);
+        if($operators === null || $everyone === null){
+            throw new AssumptionFailedError('the root permissions are registered at startup');
+        }
+        foreach($description->getPermissions() as $default => $group){
+            foreach($group as $permission){
+                $permissions->addPermission($permission);
+                switch($default){
+                    case PermissionParser::DEFAULT_TRUE:
+                        $everyone->addChild($permission->getName(), true);
+                        break;
+                    case PermissionParser::DEFAULT_OP:
+                        $operators->addChild($permission->getName(), true);
+                        break;
+                    case PermissionParser::DEFAULT_NOT_OP:
+                        // the operator root, which wins, takes it back from operators
+                        $everyone->addChild($permission->getName(), true);
+                        $operators->addChild($permission->getName(), false);
+                        break;
+                }
+            }
+        }
     }
 
     public function isPluginEnabled(Plugin $plugin) : bool{
@@ -337,7 +396,20 @@ class PluginManager{
                 $this->pluginDependents[$dependency][$name] = true;
             }
         }
+        self::callSafely(new PluginEnableEvent($plugin));
         return true;
+    }
+
+    /** an event the runtime fires: a listener's failure is logged, it does not undo what the event reports */
+    private static function callSafely(Event $event) : void{
+        try{
+            if(!falcon_guard(static fn() => $event->call())){
+                Log::critical('A listener of ' . $event->getEventName() . ' stopped on ' . self::FATAL);
+            }
+        }catch(\Throwable $e){
+            Log::critical('A listener of ' . $event->getEventName() . ' failed: ' . $e->getMessage());
+            Log::exception($e);
+        }
     }
 
     /** disables every plugin, each after the plugins depending on it */
@@ -370,6 +442,7 @@ class PluginManager{
         }
         $name = $plugin->getDescription()->getName();
         Log::info('Disabling ' . $plugin->getDescription()->getFullName());
+        self::callSafely(new PluginDisableEvent($plugin));
         unset($this->enabledPlugins[$name]);
         foreach($this->pluginDependents as $dependency => $dependents){
             unset($this->pluginDependents[$dependency][$name]);
@@ -386,17 +459,121 @@ class PluginManager{
             Log::critical("Error while disabling plugin '$name': " . $e->getMessage());
             Log::exception($e);
         }
+        HandlerListManager::global()->unregisterAll($plugin);
     }
 
     /** a fatal error left the plugin in an unknown state: it is dropped, never called again */
     private function forget(Plugin $plugin) : void{
         $name = $plugin->getDescription()->getName();
         unset($this->plugins[$name], $this->enabledPlugins[$name]);
+        HandlerListManager::global()->unregisterAll($plugin);
         foreach($this->pluginDependents as $dependency => $dependents){
             unset($this->pluginDependents[$dependency][$name]);
             if(count($this->pluginDependents[$dependency]) === 0){
                 unset($this->pluginDependents[$dependency]);
             }
         }
+    }
+
+    private function getEventsHandledBy(\ReflectionMethod $method) : ?string{
+        if($method->isStatic() || !$method->getDeclaringClass()->implementsInterface(Listener::class)){
+            return null;
+        }
+        $tags = Utils::parseDocComment((string) $method->getDocComment());
+        if(isset($tags[ListenerMethodTags::NOT_HANDLER])){
+            return null;
+        }
+
+        $parameters = $method->getParameters();
+        if(count($parameters) !== 1){
+            return null;
+        }
+
+        $paramType = $parameters[0]->getType();
+        // isBuiltin() is false for built-in classes too, it only means scalar types
+        if(!$paramType instanceof \ReflectionNamedType || $paramType->isBuiltin()){
+            return null;
+        }
+
+        $eventClass = new \ReflectionClass($paramType->getName());
+        if(!$eventClass->isSubclassOf(Event::class)){
+            return null;
+        }
+        return $eventClass->getName();
+    }
+
+    /** registers each public method of the listener taking one event, with its @priority and @handleCancelled */
+    public function registerEvents(Listener $listener, Plugin $plugin) : void{
+        if(!$plugin->isEnabled()){
+            throw new PluginException('Plugin attempted to register ' . get_class($listener) . ' while not enabled');
+        }
+
+        $reflection = new \ReflectionClass(get_class($listener));
+        foreach($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method){
+            $tags = Utils::parseDocComment((string) $method->getDocComment());
+            if(isset($tags[ListenerMethodTags::NOT_HANDLER]) || ($eventClass = $this->getEventsHandledBy($method)) === null){
+                continue;
+            }
+            $handlerClosure = $method->getClosure($listener);
+            if($handlerClosure === null){
+                throw new AssumptionFailedError('a public method always gives a closure');
+            }
+
+            try{
+                $priority = isset($tags[ListenerMethodTags::PRIORITY])
+                    ? EventPriority::fromString($tags[ListenerMethodTags::PRIORITY]) : EventPriority::NORMAL;
+            }catch(\InvalidArgumentException){
+                throw new PluginException('Event handler ' . Utils::getNiceClosureName($handlerClosure)
+                    . '() declares invalid/unknown priority "' . $tags[ListenerMethodTags::PRIORITY] . '"');
+            }
+
+            $handleCancelled = false;
+            if(isset($tags[ListenerMethodTags::HANDLE_CANCELLED])){
+                if(!is_a($eventClass, Cancellable::class, true)){
+                    throw new PluginException(sprintf('Event handler %s() declares @%s for non-cancellable event of type %s',
+                        Utils::getNiceClosureName($handlerClosure), ListenerMethodTags::HANDLE_CANCELLED, $eventClass));
+                }
+                switch(strtolower($tags[ListenerMethodTags::HANDLE_CANCELLED])){
+                    case 'true':
+                    case '':
+                        $handleCancelled = true;
+                        break;
+                    case 'false':
+                        break;
+                    default:
+                        throw new PluginException('Event handler ' . Utils::getNiceClosureName($handlerClosure)
+                            . '() declares invalid @' . ListenerMethodTags::HANDLE_CANCELLED . ' value "'
+                            . $tags[ListenerMethodTags::HANDLE_CANCELLED] . '"');
+                }
+            }
+
+            $this->registerEvent($eventClass, $handlerClosure, $priority, $plugin, $handleCancelled);
+        }
+    }
+
+    /**
+     * @phpstan-template TEvent of Event
+     * @phpstan-param class-string<TEvent> $event
+     * @phpstan-param \Closure(TEvent) : void $handler
+     */
+    public function registerEvent(string $event, \Closure $handler, int $priority, Plugin $plugin,
+                                  bool $handleCancelled = false) : RegisteredListener{
+        if(!is_subclass_of($event, Event::class)){
+            throw new PluginException($event . ' is not an Event');
+        }
+
+        $handlerName = Utils::getNiceClosureName($handler);
+        if((new \ReflectionFunction($handler))->isGenerator()){
+            throw new PluginException("Generator function $handlerName cannot be used as an event handler");
+        }
+        if(!$plugin->isEnabled()){
+            throw new PluginException('Plugin attempted to register event handler ' . $handlerName . '() to event '
+                . $event . ' while not enabled');
+        }
+
+        $timings = Timings::getEventHandlerTimings($event, $handlerName, $plugin->getDescription()->getFullName());
+        $registeredListener = new RegisteredListener($handler, $priority, $plugin, $handleCancelled, $timings);
+        HandlerListManager::global()->getListFor($event)->register($registeredListener);
+        return $registeredListener;
     }
 }

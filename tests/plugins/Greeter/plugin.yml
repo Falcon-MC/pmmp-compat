@@ -1,0 +1,18 @@
+name: Greeter
+version: 1.0.0
+main: greeter\Main
+api: 5.0.0
+commands:
+  greet:
+    description: Greets whoever runs it
+    usage: /greet <words>
+    aliases: [gr]
+    permission: greeter.command.greet
+  secret:
+    description: Only for operators
+    permission: greeter.command.secret
+permissions:
+  greeter.command.greet:
+    default: true
+  greeter.command.secret:
+    default: op

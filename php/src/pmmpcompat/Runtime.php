@@ -8,7 +8,10 @@ use pmmpcompat\plugin\FolderPluginLoader;
 use pocketmine\errorhandler\ErrorToExceptionHandler;
 use pocketmine\plugin\PharPluginLoader;
 use pocketmine\plugin\PluginEnableOrder;
+use pocketmine\permission\DefaultPermissions;
 use pocketmine\plugin\PluginManager;
+use pocketmine\Server;
+use pocketmine\timings\Timings;
 use pocketmine\utils\Filesystem;
 
 /** Starts and stops the PocketMine-MP plugins inside Falcon. */
@@ -53,7 +56,10 @@ final class Runtime{
             }
         }
 
-        $manager = new PluginManager(self::API_VERSION, $dataPath);
+        Timings::init();
+        DefaultPermissions::registerCorePermissions();
+        $server = new Server(self::$logger, \pocketmine\DATA, \pocketmine\PLUGIN_PATH, $dataPath);
+        $manager = $server->getPluginManager();
         $manager->registerInterface(new PharPluginLoader($classes));
         $manager->registerInterface(new FolderPluginLoader($classes));
         self::$plugins = $manager;
@@ -76,6 +82,7 @@ final class Runtime{
             'COMPOSER_AUTOLOADER_PATH' => $runtimeFolder . '/vendor/autoload.php',
             'DATA' => str_replace('\\', '/', (string) getcwd()) . '/',
             'PLUGIN_PATH' => $pluginFolder . '/plugins/',
+            'LOCALE_DATA_PATH' => $runtimeFolder . '/resources/locale/',
         ];
         foreach($paths as $name => $path){
             if(!defined('pocketmine\\' . $name)){
