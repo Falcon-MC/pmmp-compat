@@ -18,7 +18,8 @@ Copied as released, without their tests and command line tools. Each keeps its l
 | [symfony/deprecation-contracts](https://github.com/symfony/deprecation-contracts) | v3.8.1 | `23c2353ad960146de00ee3ec591d0b6a0828e1eb03d4131fcdd2a2ee7333d71e` | MIT |
 
 The archives are GitHub's tag tarballs (`https://codeload.github.com/<owner>/<name>/tar.gz/refs/tags/<version>`).
-symfony/yaml stands in for the yaml extension, which the server's PHP is built without. symfony/filesystem is the
+symfony/yaml stands in for the yaml extension, which the server's PHP is built without. `Inline.php` is patched to read
+unquoted numbers with a leading zero as YAML 1.1 octal, as that extension does (`00`, `010`). symfony/filesystem is the
 `Path` and `Filesystem` PocketMine-MP ships and plugins use.
 
 `php/src/log/`, `php/src/pocketmine/errorhandler/` and much of `php/src/pocketmine/` (events, commands, permissions,

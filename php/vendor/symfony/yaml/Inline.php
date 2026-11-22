@@ -926,6 +926,11 @@ class Inline
                             return $scalar;
                         }
 
+                        // pmmp-compat: YAML 1.1 octal, as the yaml extension PocketMine-MP plugins expect reads 00 and 010
+                        if (Parser::preg_match('{^-?0[0-7]+$}', $scalar)) {
+                            return '-' === $scalar[0] ? -octdec(substr($scalar, 1)) : octdec($scalar);
+                        }
+
                         $cast = (int) $scalar;
 
                         return ($scalar === (string) $cast) ? $cast : $scalar;

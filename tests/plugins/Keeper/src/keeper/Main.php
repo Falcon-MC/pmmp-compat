@@ -43,6 +43,10 @@ final class Main extends PluginBase{
             . ", igbinary " . (igbinary_unserialize(igbinary_serialize(["a" => 1]))["a"] ?? 0)
             . ", sockets " . (function_exists("socket_create") ? "ready" : "missing"));
 
+        $yaml = yaml_parse("decimals: 00\nmode: 010\nname: '010'");
+        $logger->info("fixture: Keeper yaml reads " . var_export($yaml["decimals"], true) . ", " . var_export($yaml["mode"], true)
+            . ", " . var_export($yaml["name"], true));
+
         $resolver = new PromiseResolver();
         $resolver->getPromise()->onCompletion(
             fn(string $value) => $logger->info("fixture: Keeper promise resolved with $value"),
