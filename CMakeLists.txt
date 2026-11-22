@@ -53,6 +53,10 @@ target_link_libraries(PmmpCompat PRIVATE "${PMMP_LIBPHP}")
 # what php-config --libs lists for the build
 if (WIN32)
     target_link_libraries(PmmpCompat PRIVATE "${PMMP_LIBPHP_TS}")
+    # the watchdog's C11 atomics, which MSVC keeps behind a switch
+    if (MSVC)
+        set_source_files_properties(src/php_watchdog.c PROPERTIES COMPILE_OPTIONS "/std:c11;/experimental:c11atomics")
+    endif ()
     target_compile_definitions(PmmpCompat PRIVATE ZEND_WIN32 PHP_WIN32 ZTS=1 ZEND_DEBUG=0 WIN32 _WINDOWS)
 elseif (UNIX)
     # the libraries the build links against, openssl's and gmp's archives among them on macOS
