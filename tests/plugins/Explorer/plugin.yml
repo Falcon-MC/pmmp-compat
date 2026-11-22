@@ -1,0 +1,4 @@
+name: Explorer
+version: 1.0.0
+main: explorer\Main
+api: 5.0.0

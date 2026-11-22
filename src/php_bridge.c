@@ -1,5 +1,6 @@
 // the embedded interpreter, kept in C: PHP's headers and its thread-safe globals are meant to be used from C
 #include "php_bridge.h"
+#include "php_bridge_internal.h"
 
 #include <php_embed.h>
 #include <zend_exceptions.h>
@@ -13,17 +14,10 @@
 
 static pmmp_log_sink log_sink = NULL;
 static char *plugin_folder = NULL;
-static const FalconServerApi *falcon = NULL;
-static FalconPlugin *falcon_plugin = NULL;
+const FalconServerApi *falcon = NULL;
+FalconPlugin *falcon_plugin = NULL;
 static bool php_running = false;
 
-// a function added to the table after the oldest Falcon this runs on: absent from a shorter table
-#define FALCON_HAS(field) \
-    (falcon != NULL && falcon->size >= offsetof(FalconServerApi, field) + sizeof(falcon->field) && falcon->field != NULL)
-
-// Falcon's handles travel through PHP as integers
-#define HANDLE(type, value) ((type *) (uintptr_t) (value))
-#define TO_LONG(pointer) ((zend_long) (uintptr_t) (pointer))
 
 static void return_text(zval *return_value, const char *text) {
     RETURN_STRING(text != NULL ? text : "");
@@ -522,11 +516,17 @@ static const zend_function_entry falcon_functions[] = {
     PHP_FE_END
 };
 
+// the world, block, item and entity functions live in php_world.c
+static PHP_MINIT_FUNCTION(falcon) {
+    (void) type;
+    return zend_register_functions(NULL, falcon_world_functions, NULL, MODULE_PERSISTENT);
+}
+
 static zend_module_entry falcon_module = {
     STANDARD_MODULE_HEADER,
     "falcon",
     falcon_functions,
-    NULL, NULL, NULL, NULL, NULL,
+    PHP_MINIT(falcon), NULL, NULL, NULL, NULL,
     "0.1.0",
     STANDARD_MODULE_PROPERTIES
 };

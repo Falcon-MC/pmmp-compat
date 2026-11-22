@@ -39,6 +39,9 @@ final class Runtime{
         $classes->addPath('Symfony\\Component\\Yaml', $runtimeFolder . '/vendor/symfony/yaml');
         $classes->addPath('Symfony\\Component\\Filesystem', $runtimeFolder . '/vendor/symfony/filesystem');
         $classes->addPath('DaveRandom\\CallbackValidator', $runtimeFolder . '/vendor/pocketmine/callback-validator');
+        foreach(['math', 'nbt', 'color'] as $library){
+            $classes->addPath('pocketmine\\' . $library, $runtimeFolder . '/vendor/pocketmine/' . $library);
+        }
         // the log library's classes are global: \Logger, \PrefixedLogger
         $classes->addPath('', $runtimeFolder . '/src/log');
         $classes->register();

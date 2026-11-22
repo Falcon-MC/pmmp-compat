@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace pocketmine\player;
 
 use pocketmine\command\CommandSender;
+use pocketmine\entity\Human;
+use pocketmine\inventory\PlayerInventory;
 use pocketmine\lang\Language;
 use pocketmine\lang\Translatable;
 use pocketmine\permission\DefaultPermissions;
@@ -20,7 +22,7 @@ use pocketmine\utils\TextFormat;
  * The object lives on after the player leaves, as in PocketMine-MP: isOnline() turns false and what would reach the
  * player is dropped. Operators get the operator permissions, as op status gives them in PocketMine-MP.
  */
-class Player implements CommandSender{
+class Player extends Human implements CommandSender{
     use PermissibleDelegateTrait{
         hasPermission as private permissibleHasPermission;
         isPermissionSet as private permissibleIsPermissionSet;
@@ -29,21 +31,22 @@ class Player implements CommandSender{
     private bool $online = true;
     private string $username;
     private string $displayName;
-    private string $nameTag;
     private string $xuid;
     private bool $operator = false;
     private ?int $lineHeight = null;
     /** what the next leave message is to be, when a kick names one */
     private Translatable|string|null $quitMessage = null;
+    private PlayerInventory $inventory;
 
     /** @internal the runtime makes one for each of Falcon's players */
     public function __construct(
         private Server $server,
         private int $handle
     ){
+        parent::__construct(falcon_entity_runtime_id(falcon_player_entity($handle)));
+        $this->inventory = new PlayerInventory($this);
         $this->username = falcon_player_name($handle);
         $this->displayName = $this->username;
-        $this->nameTag = $this->username;
         $this->xuid = falcon_player_xuid($handle);
         $this->perm = new PermissibleBase([DefaultPermissions::ROOT_USER => true]);
         $this->syncOperator();
@@ -57,6 +60,15 @@ class Player implements CommandSender{
     /** @internal the Falcon handle while online */
     public function getHandle() : int{
         return $this->handle;
+    }
+
+    /** @internal a player's body is theirs while they are online */
+    public function getEntityHandle() : int{
+        return $this->online ? falcon_player_entity($this->handle) : 0;
+    }
+
+    public function getInventory() : PlayerInventory{
+        return $this->inventory;
     }
 
     /** @internal the leave message a kick asked for, once */
@@ -88,14 +100,6 @@ class Player implements CommandSender{
 
     public function setDisplayName(string $name) : void{
         $this->displayName = $name;
-    }
-
-    public function getNameTag() : string{
-        return $this->nameTag;
-    }
-
-    public function setNameTag(string $name) : void{
-        $this->nameTag = $name;
     }
 
     public function getGamemode() : GameMode{

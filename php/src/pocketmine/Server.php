@@ -18,6 +18,7 @@ use pocketmine\permission\DefaultPermissionNames;
 use pocketmine\player\Player;
 use pocketmine\plugin\PluginManager;
 use pocketmine\scheduler\AsyncPool;
+use pocketmine\world\WorldManager;
 use pocketmine\utils\BroadcastLoggerForwarder;
 
 /**
@@ -38,6 +39,7 @@ class Server{
     private ConsoleCommandSender $console;
     private BroadcastLoggerForwarder $logForwarder;
     private AsyncPool $asyncPool;
+    private WorldManager $worldManager;
     private int $tickCounter = 0;
 
     public static function getInstance() : Server{
@@ -61,6 +63,16 @@ class Server{
         $this->commandMap = new SimpleCommandMap($this);
         $this->pluginManager = new PluginManager($this, $pluginDataPath);
         $this->asyncPool = new AsyncPool();
+        $this->worldManager = new WorldManager();
+    }
+
+    public function getWorldManager() : WorldManager{
+        return $this->worldManager;
+    }
+
+    /** Falcon's own version, which names the game version it speaks */
+    public function getVersion() : string{
+        return falcon_server_version();
     }
 
     /** @internal each of Falcon's ticks: the plugins' schedulers, then the async tasks */
@@ -68,6 +80,9 @@ class Server{
         ++$this->tickCounter;
         $this->pluginManager->tickSchedulers($this->tickCounter);
         $this->asyncPool->collectTasks();
+        if($this->tickCounter % 1200 === 0){
+            \pmmpcompat\Entities::forgetClosed();
+        }
     }
 
     public function getTick() : int{

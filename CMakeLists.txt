@@ -9,7 +9,8 @@ include(FetchContent)
 FetchContent_Declare(
     falcon_plugin_api
     GIT_REPOSITORY https://github.com/Falcon-MC/PluginAPI.git
-    GIT_TAG main
+    # until Falcon-MC/PluginAPI#28 is merged: entities found again by runtime id
+    GIT_TAG feat/entity-by-runtime-id
     GIT_SHALLOW TRUE
 )
 set(FALCON_PLUGIN_API_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -29,7 +30,8 @@ endif ()
 
 falcon_add_plugin(PmmpCompat
     src/PmmpCompat.cpp
-    src/php_bridge.c)
+    src/php_bridge.c
+    src/php_world.c)
 target_include_directories(PmmpCompat PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
     "${PMMP_PHP_INCLUDE}"

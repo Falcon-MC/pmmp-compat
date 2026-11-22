@@ -19,6 +19,27 @@ use pocketmine\event\player\PlayerToggleFlightEvent;
 use pocketmine\event\player\PlayerToggleSneakEvent;
 use pocketmine\event\player\PlayerToggleSprintEvent;
 use pocketmine\event\server\CommandEvent;
+use pocketmine\block\BaseSign;
+use pocketmine\block\Block;
+use pocketmine\block\utils\SignText;
+use pocketmine\entity\Living;
+use pocketmine\entity\Location;
+use pocketmine\event\block\BlockBreakEvent;
+use pocketmine\event\block\BlockPlaceEvent;
+use pocketmine\event\block\SignChangeEvent;
+use pocketmine\event\entity\EntityDamageByEntityEvent;
+use pocketmine\event\entity\EntityDamageEvent;
+use pocketmine\event\entity\EntityDeathEvent;
+use pocketmine\event\entity\EntityTeleportEvent;
+use pocketmine\event\player\PlayerDeathEvent;
+use pocketmine\event\player\PlayerInteractEvent;
+use pocketmine\event\player\PlayerItemUseEvent;
+use pocketmine\event\player\PlayerMoveEvent;
+use pocketmine\event\player\PlayerRespawnEvent;
+use pocketmine\item\Item;
+use pocketmine\player\Player;
+use pocketmine\world\BlockTransaction;
+use pocketmine\world\Position;
 use pocketmine\player\GameMode;
 use pocketmine\lang\Translatable;
 use pocketmine\player\chat\StandardChatFormatter;
@@ -46,12 +67,26 @@ final class Bridge{
     private const PLAYER_TOGGLE_FLIGHT = 34;
     private const PLAYER_JUMP = 39;
     private const PLAYER_EMOTE = 76;
+    private const BLOCK_BREAK = 4;
+    private const BLOCK_PLACE = 5;
+    private const PLAYER_INTERACT_BLOCK = 6;
+    private const ENTITY_DAMAGE = 7;
+    private const ENTITY_DEATH = 8;
+    private const PLAYER_DEATH = 9;
+    private const PLAYER_RESPAWN = 10;
+    private const PLAYER_MOVE = 11;
+    private const SIGN_CHANGE = 54;
+    private const PLAYER_TELEPORT = 70;
+    private const PLAYER_ITEM_USE = 71;
+    private const ENTITY_TELEPORT = 83;
 
     /** what the runtime listens to; each becomes a PocketMine-MP event in create() */
     private const LISTENED = [
         self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_CHAT, self::PLAYER_COMMAND, self::SERVER_COMMAND,
         self::PLAYER_GAME_MODE_CHANGE, self::PLAYER_PRE_LOGIN, self::PLAYER_TOGGLE_SNEAK, self::PLAYER_TOGGLE_SPRINT,
-        self::PLAYER_TOGGLE_FLIGHT, self::PLAYER_JUMP, self::PLAYER_EMOTE,
+        self::PLAYER_TOGGLE_FLIGHT, self::PLAYER_JUMP, self::PLAYER_EMOTE, self::BLOCK_BREAK, self::BLOCK_PLACE,
+        self::PLAYER_INTERACT_BLOCK, self::ENTITY_DAMAGE, self::ENTITY_DEATH, self::PLAYER_DEATH, self::PLAYER_RESPAWN,
+        self::PLAYER_MOVE, self::SIGN_CHANGE, self::PLAYER_TELEPORT, self::PLAYER_ITEM_USE, self::ENTITY_TELEPORT,
     ];
 
     /** @var array<int, array{event: Event, message: string, recipients: object[], sender: ?object}> by handle */
@@ -156,8 +191,132 @@ final class Bridge{
                 return self::state(new PlayerJumpEvent(Players::get(falcon_event_player($handle))), $message, $handle);
             case self::PLAYER_EMOTE:
                 return self::state(new PlayerEmoteEvent(Players::get(falcon_event_player($handle)), $message), $message, $handle);
+            default:
+                return self::createWorldEvent($type, $handle, $message);
+        }
+    }
+
+    /** the events that carry blocks, items and entities */
+    private static function createWorldEvent(int $type, int $handle, string $message) : ?array{
+        $playerHandle = falcon_event_player($handle);
+        $player = $playerHandle !== 0 ? Players::get($playerHandle) : null;
+        switch($type){
+            case self::PLAYER_MOVE:
+                if($player === null){
+                    return null;
+                }
+                $from = $player->getLocation();
+                [$x, $y, $z] = falcon_event_from($handle);
+                [$toX, $toY, $toZ] = falcon_event_to($handle);
+                $world = $from->isValid() ? $from->getWorld() : null;
+                $event = new PlayerMoveEvent($player, new Location($x, $y, $z, $world, $from->yaw, $from->pitch),
+                    new Location($toX, $toY, $toZ, $world, $from->yaw, $from->pitch));
+                return self::state($event, $message, $handle) + ['to' => [$toX, $toY, $toZ]];
+            case self::PLAYER_TELEPORT:
+            case self::ENTITY_TELEPORT:
+                $entity = $player ?? self::eventEntity($handle);
+                if($entity === null){
+                    return null;
+                }
+                $world = self::eventWorld($handle) ?? $entity->getWorld();
+                [$x, $y, $z] = falcon_event_from($handle);
+                [$toX, $toY, $toZ] = falcon_event_to($handle);
+                $event = new EntityTeleportEvent($entity, new Position($x, $y, $z, $entity->getWorld()),
+                    new Position($toX, $toY, $toZ, $world));
+                return self::state($event, $message, $handle) + ['to' => [$toX, $toY, $toZ]];
+            case self::ENTITY_DAMAGE:
+                $entity = self::eventEntity($handle);
+                if($entity === null){
+                    return null;
+                }
+                $cause = DamageCauses::fromFalcon(falcon_event_cause($handle));
+                $amount = falcon_event_amount($handle);
+                $attackerHandle = falcon_event_attacker($handle);
+                $event = $attackerHandle !== 0
+                    ? new EntityDamageByEntityEvent(Entities::get($attackerHandle), $entity, $cause, $amount)
+                    : new EntityDamageEvent($entity, $cause, $amount);
+                $entity->setLastDamageCause($event);
+                return self::state($event, $message, $handle) + ['amount' => $amount];
+            case self::ENTITY_DEATH:
+                $entity = self::eventEntity($handle);
+                return $entity instanceof Living && !$entity instanceof Player
+                    ? self::state(new EntityDeathEvent($entity), $message, $handle) : null;
+            case self::PLAYER_DEATH:
+                return $player === null ? null : self::state(new PlayerDeathEvent($player, [], 0, $message), $message, $handle);
+            case self::PLAYER_RESPAWN:
+                if($player === null){
+                    return null;
+                }
+                [$x, $y, $z] = falcon_event_to($handle);
+                $world = $player->getWorld();
+                return self::state(new PlayerRespawnEvent($player, new Position($x, $y, $z, $world)), $message, $handle)
+                    + ['to' => [$x, $y, $z]];
+            case self::PLAYER_INTERACT_BLOCK:
+                if($player === null){
+                    return null;
+                }
+                $block = self::eventBlock($handle, $player);
+                $face = falcon_event_block($handle)[3];
+                return self::state(new PlayerInteractEvent($player, $player->getInventory()->getItemInHand(), $block, null,
+                    $face, PlayerInteractEvent::RIGHT_CLICK_BLOCK), $message, $handle);
+            case self::PLAYER_ITEM_USE:
+                if($player === null){
+                    return null;
+                }
+                $data = falcon_event_item($handle);
+                $item = $data !== null ? Item::fromFalcon($data) : $player->getInventory()->getItemInHand();
+                return self::state(new PlayerItemUseEvent($player, $item, $player->getDirectionVector()), $message, $handle);
+            case self::BLOCK_BREAK:
+                if($player === null){
+                    return null;
+                }
+                $block = self::eventBlock($handle, $player, true);
+                return self::state(new BlockBreakEvent($player, $block, $player->getInventory()->getItemInHand(),
+                    $player->isCreative()), $message, $handle);
+            case self::BLOCK_PLACE:
+                if($player === null){
+                    return null;
+                }
+                $placed = self::eventBlock($handle, $player, true);
+                $world = $player->getWorld();
+                $position = $placed->getPosition();
+                $transaction = (new BlockTransaction($world))->addBlock($position, $placed);
+                $against = $world->getBlock($position);
+                return self::state(new BlockPlaceEvent($player, $transaction, $against,
+                    $player->getInventory()->getItemInHand()), $message, $handle);
+            case self::SIGN_CHANGE:
+                if($player === null){
+                    return null;
+                }
+                $sign = self::eventBlock($handle, $player);
+                $sign = $sign instanceof BaseSign ? $sign : (new BaseSign("minecraft:oak_sign"))->withPosition(
+                    $sign->getPosition()->getWorld(), (int) $sign->getPosition()->x, (int) $sign->getPosition()->y,
+                    (int) $sign->getPosition()->z);
+                $text = new SignText(explode("\n", $message));
+                return self::state(new SignChangeEvent($sign, $player, $text, falcon_event_state($handle)), $message, $handle);
         }
         return null;
+    }
+
+    private static function eventEntity(int $handle) : ?\pocketmine\entity\Entity{
+        $entity = falcon_event_entity($handle);
+        return $entity === 0 ? null : Entities::get($entity);
+    }
+
+    private static function eventWorld(int $handle) : ?\pocketmine\world\World{
+        return Server::getInstance()->getWorldManager()->forLevel(falcon_event_level($handle));
+    }
+
+    /**
+     * The event's block where it is; named by the event when Falcon names it, read from the world otherwise.
+     */
+    private static function eventBlock(int $handle, Player $player, bool $named = false) : Block{
+        [$x, $y, $z, , $name] = falcon_event_block($handle);
+        $world = self::eventWorld($handle) ?? $player->getWorld();
+        if($named && $name !== ""){
+            return Block::fromFalcon($name, "{}")->withPosition($world, $x, $y, $z);
+        }
+        return $world->getBlockAt($x, $y, $z);
     }
 
     /** @return array{event: Event, message: string, recipients: object[], sender: ?object} */
@@ -230,6 +389,22 @@ final class Bridge{
             }
         }elseif($event instanceof PlayerEmoteEvent){
             self::applyMessage($handle, $state, $event->getEmoteId());
+        }elseif($event instanceof PlayerMoveEvent || $event instanceof EntityTeleportEvent || $event instanceof PlayerRespawnEvent){
+            $to = $event instanceof PlayerRespawnEvent ? $event->getRespawnPosition() : $event->getTo();
+            if([$to->x, $to->y, $to->z] !== $state['to']){
+                falcon_event_set_to($handle, $to->x, $to->y, $to->z);
+                $state['to'] = [$to->x, $to->y, $to->z];
+            }
+        }elseif($event instanceof EntityDamageEvent){
+            $amount = $event->getFinalDamage();
+            if($amount !== $state['amount']){
+                falcon_event_set_amount($handle, $amount);
+                $state['amount'] = $amount;
+            }
+        }elseif($event instanceof PlayerDeathEvent){
+            self::applyMessage($handle, $state, self::text($event->getDeathMessage()));
+        }elseif($event instanceof SignChangeEvent){
+            self::applyMessage($handle, $state, implode("\n", $event->getNewText()->getLines()));
         }elseif($event instanceof PlayerChatEvent){
             if($event->getMessage() !== $state['message']){
                 falcon_event_set_message($handle, $event->getMessage());

@@ -22,9 +22,9 @@ for phar in "$root"/tests/phar/*/; do
     "$python" "$root/scripts/make-phar.py" "$phar" "$plugin/plugins/$name.phar"
 done
 
-# the stop comes once the players test has run: it starts a second into the ticks
+# the stop comes once the players test has run: it starts a second into the ticks and lasts about four
 # console lines first: CommandEvent fires for typed commands, and "blocked" is one the Ticker plugin cancels
-(cd "$work" && (sleep 6; printf 'blocked thing\ngreet from stdin\n'; sleep 1; printf 'stop\n') \
+(cd "$work" && (sleep 9; printf 'blocked thing\ngreet from stdin\n'; sleep 1; printf 'stop\n') \
     | PMMP_COMPAT_SELFTEST=1 "$server" --no-wizard > server.log 2>&1) || true
 log="$work/server.log"
 cat "$log"
@@ -80,7 +80,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "9 PocketMine-MP plugins loaded, 9 could not be"
+expect "10 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -135,6 +135,21 @@ if grep -qF "Visitor in ADVENTURE" "$log"; then
     echo "a cancelled game mode change went through"
     failed=1
 fi
+
+# worlds, blocks, items, a player's inventory and body, and the events that carry them
+expect "fixture: Explorer default world found by name, 3 levels"
+expect "fixture: Explorer placed Gold Block, read back at y 250"
+expect "fixture: Explorer cleared it to Air"
+expect "fixture: Explorer time of day 1000"
+expect "fixture: Explorer parsed the same sword"
+expect "fixture: Explorer json keeps Blade with sharp"
+expect "fixture: Explorer refused an unknown item"
+expect "fixture: Explorer gave it, slot 0 holds Blade (sharp)"
+expect "fixture: Explorer sees Visitor in Bedrock level with 20 health, found by id"
+expect "fixture: Explorer saw Visitor teleport 3 blocks"
+expect "fixture: Explorer saw Visitor take 4 damage, cause 14"
+expect "fixture: Explorer sees Visitor at 19 health"
+expect "fixture: Explorer saw Visitor die"
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

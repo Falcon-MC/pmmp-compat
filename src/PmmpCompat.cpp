@@ -110,8 +110,12 @@ private:
             visitor->executeCommand("blocked thing");
             visitor->setGameMode(falcon::GameMode::Creative);
             visitor->setGameMode(falcon::GameMode::Adventure);
-            // after the game mode checks, which look a tick later
-            scheduler().delay(5, [visitor] { visitor->kick("Bye from the test"); });
+            // the Explorer plugin teleports the visitor two ticks after joining; the damage and the death wait for the
+            // spawn invulnerability, 60 ticks
+            scheduler().delay(3, [visitor] { visitor->setGameMode(falcon::GameMode::Survival); });
+            scheduler().delay(65, [visitor] { visitor->entity().damage(4.0f, "death.attack.generic"); });
+            scheduler().delay(70, [visitor] { visitor->entity().kill(); });
+            scheduler().delay(75, [visitor] { visitor->kick("Bye from the test"); });
         });
     }
 
