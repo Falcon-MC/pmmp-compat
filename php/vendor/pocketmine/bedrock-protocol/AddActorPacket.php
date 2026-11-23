@@ -84,7 +84,7 @@ class AddActorPacket extends DataPacket implements ClientboundPacket{
 		array $metadata,
 		PropertySyncData $syncedProperties,
 		array $links,
-		?PassengerOfBlockArguments $passengerOfBlockData,
+		?PassengerOfBlockArguments $passengerOfBlockData = null,
 	) : self{
 		$result = new self;
 		$result->actorUniqueId = $actorUniqueId;

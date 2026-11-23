@@ -24,6 +24,7 @@ declare(strict_types=1);
 namespace pocketmine\inventory;
 
 use pocketmine\item\Item;
+use pocketmine\player\Player;
 use pocketmine\item\VanillaItems;
 
 /**
@@ -90,11 +91,14 @@ class SimpleInventory extends BaseInventory{
 	}
 
 	/**
-	 * @internal what a player moved in this inventory's Falcon window, taken in without the change listeners: the
-	 * transaction event already told them
+	 * @internal copy the committed slot change from Falcon into the shared inventory
 	 */
-	public function takeFromWindow(int $index, Item $item) : void{
-		$this->slots[$index] = $item->isNull() ? null : $item;
+	public function takeFromWindow(int $index, Item $item, Player $source) : void{
+		$previous = $this->getItem($index);
+		if(!$item->equalsExact($previous)){
+			$this->slots[$index] = $item->isNull() ? null : $item;
+			$this->notifySlotChange($index, $previous, $source);
+		}
 	}
 
 	public function isSlotEmpty(int $index) : bool{

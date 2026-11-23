@@ -32,7 +32,14 @@ use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
 
 final class IntMetadataProperty implements MetadataProperty{
 	use GetTypeIdFromConstTrait;
-	use IntegerishMetadataProperty;
+	use IntegerishMetadataProperty{
+		__construct as private initValue;
+	}
+
+	public function __construct(int $value){
+		// block runtime hashes can arrive as unsigned 32-bit values
+		$this->initValue($value > 0x7fffffff && $value <= 0xffffffff ? $value - 0x100000000 : $value);
+	}
 
 	public const ID = EntityMetadataTypes::INT;
 

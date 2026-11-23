@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe;
 
+use pmmpcompat\Bridge;
 use pmmpcompat\Log;
 use pocketmine\block\inventory\BlockInventory;
 use pocketmine\block\inventory\HopperInventory;
+use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\inventory\Inventory;
 use pocketmine\inventory\SimpleInventory;
 use pocketmine\item\Item;
@@ -30,7 +32,8 @@ class InventoryManager{
 
     private ?Inventory $window = null;
     private int $windowId = 0;
-    private bool $moved = false;
+    /** @var array<int, true> */
+    private array $movedSlots = [];
     private bool $closedByFalcon = false;
 
     public function __construct(
@@ -73,11 +76,10 @@ class InventoryManager{
     }
 
     /** @internal Player::setCurrentWindow() */
-    public function onCurrentWindowChange(Inventory $inventory) : void{
+    public function onCurrentWindowChange(Inventory $inventory) : bool{
         $this->onCurrentWindowRemove();
         $packets = null;
-        // the newest callbacks first, as plugins add theirs after the default one
-        foreach(array_reverse($this->containerOpenCallbacks->toArray()) as $callback){
+        foreach($this->containerOpenCallbacks->toArray() as $callback){
             $packets = $callback(0, $inventory);
             if($packets !== null){
                 break;
@@ -95,19 +97,32 @@ class InventoryManager{
             }
         }
         if($open === null || !$this->player->isOnline()){
-            return;
+            return false;
         }
         $position = $open->blockPosition;
         $id = falcon_player_open_window($this->player->getHandle(), $open->windowType, $position->getX(),
             $position->getY(), $position->getZ(), $open->actorUniqueId, $inventory->getSize());
         if($id === 0){
             Log::warning("A window could not open for " . $this->player->getName() . ": another one is open, or Falcon has no plugin windows");
-            return;
+            return false;
         }
         $this->window = $inventory;
         $this->windowId = $id;
         $this->closedByFalcon = false;
+        Bridge::listenFor(DataPacketReceiveEvent::class);
         $this->syncContents($inventory);
+        return true;
+    }
+
+    /** @internal Resolve the placeholder passed to the packet callback once Falcon allocates the window. */
+    public function resolveWindowId(int $id) : int{
+        return $id === 0 && $this->window !== null ? $this->windowId : $id;
+    }
+
+    public function onClientRemoveWindow(int $windowId) : void{
+        if($this->getWindow($this->resolveWindowId($windowId)) !== null){
+            $this->player->removeCurrentWindow();
+        }
     }
 
     /** @internal Player::removeCurrentWindow() */
@@ -116,11 +131,12 @@ class InventoryManager{
             return;
         }
         $this->takeMoves();
-        if(!$this->closedByFalcon && $this->player->isOnline()){
-            falcon_player_close_window($this->player->getHandle(), $this->windowId);
-        }
+        $id = $this->windowId;
         $this->window = null;
         $this->windowId = 0;
+        if(!$this->closedByFalcon && $this->player->isOnline()){
+            falcon_player_close_window($this->player->getHandle(), $id);
+        }
     }
 
     /** @internal Falcon closed the window: the client did, or the server did */
@@ -133,24 +149,27 @@ class InventoryManager{
     }
 
     /** @internal the player moved something in the window */
-    public function onMoved() : void{
-        $this->moved = true;
+    public function onMoved(int $slot) : void{
+        if($this->window !== null && $this->window->slotExists($slot)){
+            $this->movedSlots[$slot] = true;
+        }
     }
 
     /** @internal what the player moved, into the inventory; at each tick and before the window closes */
     public function takeMoves() : void{
-        if(!$this->moved || $this->window === null || !$this->player->isOnline()){
+        if($this->movedSlots === []){
             return;
         }
-        $this->moved = false;
+        $slots = $this->movedSlots;
+        $this->movedSlots = [];
         $window = $this->window;
-        if(!$window instanceof SimpleInventory){
+        if(!$window instanceof SimpleInventory || !$this->player->isOnline()){
             return;
         }
-        for($slot = 0, $size = $window->getSize(); $slot < $size; ++$slot){
+        foreach($slots as $slot => $_){
             $data = falcon_player_window_item($this->player->getHandle(), $this->windowId, $slot);
             if($data !== null){
-                $window->takeFromWindow($slot, Item::fromFalcon($data));
+                $window->takeFromWindow($slot, Item::fromFalcon($data), $this->player);
             }
         }
     }

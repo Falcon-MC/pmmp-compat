@@ -8,6 +8,7 @@ use pmmpcompat\Entities;
 use pmmpcompat\Players;
 use pmmpcompat\world\FalconChunk;
 use pocketmine\block\Block;
+use pocketmine\block\tile\Spawnable;
 use pocketmine\block\tile\Tile;
 use pocketmine\block\tile\TileFactory;
 use pocketmine\math\AxisAlignedBB;
@@ -17,7 +18,12 @@ use pocketmine\item\Item;
 use pocketmine\math\Vector3;
 use pocketmine\player\Player;
 use pocketmine\network\mcpe\NetworkBroadcastUtils;
+use pocketmine\network\mcpe\convert\TypeConverter;
+use pocketmine\network\mcpe\protocol\BlockActorDataPacket;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
+use pocketmine\network\mcpe\protocol\UpdateBlockPacket;
+use pocketmine\network\mcpe\protocol\types\BlockPosition;
+use pocketmine\network\mcpe\protocol\types\CacheableNbt;
 use pocketmine\world\format\Chunk;
 use pocketmine\world\particle\Particle;
 use pocketmine\world\sound\Sound;
@@ -459,6 +465,31 @@ class World implements ChunkManager{
             }
         }
         return $viewers;
+    }
+
+    /**
+     * @param list<Vector3> $positions
+     * @return list<ClientboundPacket>
+     */
+    public function createBlockUpdatePackets(array $positions) : array{
+        $packets = [];
+        $translator = TypeConverter::getInstance()->getBlockTranslator();
+        foreach($positions as $position){
+            $block = $this->getBlock($position);
+            $networkPosition = BlockPosition::fromVector3($block->getPosition());
+            $packets[] = UpdateBlockPacket::create(
+                $networkPosition, $translator->internalIdToNetworkId($block->getStateId()),
+                UpdateBlockPacket::FLAG_NETWORK,
+                UpdateBlockPacket::DATA_LAYER_NORMAL
+            );
+            $tile = $this->getTile($position);
+            if($tile instanceof Spawnable){
+                $packets[] = BlockActorDataPacket::create(
+                    $networkPosition, new CacheableNbt($tile->getSerializedSpawnCompound())
+                );
+            }
+        }
+        return $packets;
     }
 
     public function broadcastPacketToViewers(Vector3 $pos, ClientboundPacket $packet) : void{

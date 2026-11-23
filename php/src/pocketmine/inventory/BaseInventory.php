@@ -367,10 +367,17 @@ abstract class BaseInventory implements Inventory, SlotValidatedInventory{
 	}
 
 	protected function onSlotChange(int $index, Item $before) : void{
+		$this->notifySlotChange($index, $before);
+	}
+
+	protected function notifySlotChange(int $index, Item $before, ?Player $source = null) : void{
 		foreach($this->listeners as $listener){
 			$listener->onSlotChange($this, $index, $before);
 		}
 		foreach($this->viewers as $viewer){
+			if($viewer === $source){
+				continue;
+			}
 			$invManager = $viewer->getNetworkSession()->getInvManager();
 			if($invManager === null){
 				continue;

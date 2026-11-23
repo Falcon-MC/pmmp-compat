@@ -8,6 +8,8 @@ use pmmpcompat\Packets;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\protocol\ClientboundCloseFormPacket;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
+use pocketmine\network\mcpe\protocol\ContainerClosePacket;
+use pocketmine\network\mcpe\protocol\ContainerOpenPacket;
 use pocketmine\player\Player;
 
 /**
@@ -66,7 +68,7 @@ class NetworkSession{
         if(!DataPacketSendEvent::hasHandlers()){
             return $this->sendWithoutEvent($packet);
         }
-        $event = new DataPacketSendEvent([$this], [$packet]);
+        $event = new DataPacketSendEvent([$this], [$this->withWindowId($packet)]);
         $event->call();
         if($event->isCancelled()){
             return false;
@@ -83,8 +85,19 @@ class NetworkSession{
         if(!$this->player->isOnline()){
             return false;
         }
-        [$id, $payload] = Packets::encode($packet);
+        [$id, $payload] = Packets::encode($this->withWindowId($packet));
         return falcon_player_send_packet($this->player->getHandle(), $id, $payload);
+    }
+
+    private function withWindowId(ClientboundPacket $packet) : ClientboundPacket{
+        if($packet instanceof ContainerOpenPacket || ($packet instanceof ContainerClosePacket && !$packet->server)){
+            $windowId = $this->invManager->resolveWindowId($packet->windowId);
+            if($windowId !== $packet->windowId){
+                $packet = clone $packet;
+                $packet->windowId = $windowId;
+            }
+        }
+        return $packet;
     }
 
     public function getEntityEventBroadcaster() : EntityEventBroadcaster{

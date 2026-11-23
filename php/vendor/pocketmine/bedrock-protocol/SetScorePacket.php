@@ -38,6 +38,10 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
 
 	// TODO: we have duplicate of those types, this one stays for backwards compatibility
 	const TYPE_REMOVE = "remove";
+	const TYPE_CHANGE = 0;
+
+	/** Legacy packet-wide operation. Current packets carry the operation on each entry. */
+	public int|string|null $type = null;
 	const TYPE_PLAYER = "changeplayer";
 	const TYPE_ENTITY = "changeentity";
 	const TYPE_FAKE_PLAYER = "changefakeplayer";
@@ -56,9 +60,16 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
 	 * @generate-create-func
 	 * @param ScorePacketEntry[] $entries
 	 */
-	public static function create(array $entries) : self{
+	public static function create(array|int|string $entries, array|int|string|null $type = null) : self{
+		if(!is_array($entries)){
+			[$entries, $type] = [$type, $entries];
+		}
+		if(!is_array($entries) || is_array($type)){
+			throw new \InvalidArgumentException("Expected score packet entries and an optional legacy operation");
+		}
 		$result = new self;
 		$result->entries = $entries;
+		$result->type = $type;
 		return $result;
 	}
 
@@ -95,10 +106,13 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
 	protected function encodePayload(ByteBufferWriter $out) : void{
 		VarInt::writeUnsignedInt($out, count($this->entries));
 		foreach($this->entries as $entry){
-			$actionId = self::ACTION_IDS[$entry->type] ?? throw new \InvalidArgumentException("Unknown entry type $entry->type");
-			VarInt::writeUnsignedInt($out, $entry->type);
+			$type = $this->type === self::TYPE_REMOVE || $this->type === 1
+				? ScorePacketEntry::TYPE_REMOVE
+				: $entry->type;
+			$actionId = self::ACTION_IDS[$type] ?? throw new \InvalidArgumentException("Unknown entry type $type");
+			VarInt::writeUnsignedInt($out, $type);
 			CommonTypes::putString($out, $actionId);
-			switch($entry->type){
+			switch($type){
 				case ScorePacketEntry::TYPE_REMOVE:
 					VarInt::writeSignedLong($out, $entry->scoreboardId);
 					CommonTypes::writeOptional($out, $entry->objectiveName, CommonTypes::putString(...));

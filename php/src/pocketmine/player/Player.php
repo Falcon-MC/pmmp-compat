@@ -121,6 +121,11 @@ class Player extends Human implements CommandSender, IPlayer{
         return $this->cursorInventory;
     }
 
+    public function getPlayerInfo() : PlayerInfo{
+        return new PlayerInfo($this->getName(), $this->getUniqueId(), $this->getSkin(), $this->getLocale(),
+            ["DeviceOS" => $this->getDeviceOS()]);
+    }
+
     public function getCurrentWindow() : ?Inventory{
         return $this->currentWindow;
     }
@@ -139,7 +144,9 @@ class Player extends Human implements CommandSender, IPlayer{
         if(!$this->online){
             throw new \InvalidArgumentException("Player cannot open inventories in this state");
         }
-        $this->networkSession->getInvManager()->onCurrentWindowChange($inventory);
+        if(!$this->networkSession->getInvManager()->onCurrentWindowChange($inventory)){
+            return false;
+        }
         $inventory->onOpen($this);
         $this->currentWindow = $inventory;
         return true;
@@ -158,9 +165,9 @@ class Player extends Human implements CommandSender, IPlayer{
             return;
         }
         $window = $this->currentWindow;
-        $window->onClose($this);
-        $this->networkSession->getInvManager()->onCurrentWindowRemove();
         $this->currentWindow = null;
+        $window->onClose($this);
+        $this->networkSession->getInvManager()?->onCurrentWindowRemove();
         (new InventoryCloseEvent($window, $this))->call();
     }
 

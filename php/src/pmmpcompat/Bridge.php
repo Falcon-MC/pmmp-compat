@@ -29,10 +29,14 @@ use pocketmine\inventory\transaction\action\SlotChangeAction;
 use pocketmine\inventory\transaction\InventoryTransaction;
 use pocketmine\item\VanillaItems;
 use pmmpcompat\inventory\FalconBlockInventory;
+use pocketmine\event\server\DataPacketDecodeEvent;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\protocol\ServerboundPacket;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
+use pocketmine\network\mcpe\protocol\ContainerClosePacket;
+use pocketmine\network\mcpe\protocol\ItemStackRequestPacket;
+use pocketmine\network\mcpe\protocol\PlayerAuthInputPacket;
 use pocketmine\block\BaseSign;
 use pocketmine\block\Block;
 use pocketmine\block\utils\SignText;
@@ -128,7 +132,7 @@ final class Bridge{
         self::PLAYER_TELEPORT => [EntityTeleportEvent::class],
         self::PLAYER_ITEM_USE => [PlayerItemUseEvent::class],
         self::ENTITY_TELEPORT => [EntityTeleportEvent::class],
-        self::DATA_PACKET_RECEIVE => [DataPacketReceiveEvent::class],
+        self::DATA_PACKET_RECEIVE => [DataPacketDecodeEvent::class, DataPacketReceiveEvent::class],
         self::DATA_PACKET_SEND => [DataPacketSendEvent::class],
         // a container block's window: both ends, the current window follows them
         self::INVENTORY_OPEN => [InventoryOpenEvent::class, InventoryCloseEvent::class],
@@ -422,11 +426,30 @@ final class Bridge{
             case self::DATA_PACKET_SEND:
                 // decoded only for listeners: most packets pass with nobody looking
                 $receiving = $type === self::DATA_PACKET_RECEIVE;
-                if($player === null
-                    || !($receiving ? DataPacketReceiveEvent::hasHandlers() : DataPacketSendEvent::hasHandlers())){
+                if($player === null || (!$receiving && !DataPacketSendEvent::hasHandlers())){
                     return null;
                 }
                 [$packetId, $payload] = falcon_event_packet($handle);
+                if($receiving && DataPacketDecodeEvent::hasHandlers()){
+                    $writer = new \pmmp\encoding\ByteBufferWriter();
+                    \pmmp\encoding\VarInt::writeUnsignedInt($writer, $packetId);
+                    $decode = new DataPacketDecodeEvent($player->getNetworkSession(), $packetId, $writer->getData() . $payload);
+                    $decode->call();
+                    if($decode->isCancelled()){
+                        falcon_event_set_cancelled($handle, true);
+                        return null;
+                    }
+                }
+                $receiveHandlers = $receiving && DataPacketReceiveEvent::hasHandlers();
+                if($receiving){
+                    if($packetId === ContainerClosePacket::NETWORK_ID || $packetId === ItemStackRequestPacket::NETWORK_ID
+                        || $packetId === PlayerAuthInputPacket::NETWORK_ID){
+                        $player->getNetworkSession()->getInvManager()?->takeMoves();
+                    }
+                    if(!$receiveHandlers){
+                        return null;
+                    }
+                }
                 $packet = Packets::decode($packetId, $payload);
                 if($receiving){
                     return $packet instanceof ServerboundPacket
@@ -472,8 +495,11 @@ final class Bridge{
     private static function createTransaction(int $handle, Player $player, string $message) : ?array{
         [$action, $source, $sourceSlot, $destination, $destinationSlot, $count] = falcon_event_transaction($handle);
         $manager = $player->getNetworkSession()->getInvManager();
-        if($manager !== null && $manager->getCurrentWindowId() !== 0 && ($source === "container" || $destination === "container")){
-            $manager->onMoved();
+        if($source === "container"){
+            $manager?->onMoved($sourceSlot);
+        }
+        if($destination === "container"){
+            $manager?->onMoved($destinationSlot);
         }
         if(!InventoryTransactionEvent::hasHandlers()){
             return null;

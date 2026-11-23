@@ -154,6 +154,7 @@ expect "fixture: Explorer saw Visitor die"
 # packets, forms, a player's connection and the entity register
 expect "fixture: Courier registered its npc as courier:npc"
 expect "fixture: Courier packet round trips, protocol 1.26.60, pool ready"
+expect "fixture: Courier score, block actor NBT and fake actor packets round trip"
 expect "fixture: Courier sees Visitor with uuid set and protocol known"
 expect "fixture: Courier sent a form and a packet: sent"
 

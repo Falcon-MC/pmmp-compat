@@ -1,0 +1,4 @@
+name: StepEleven
+version: 1.0.0
+main: stepteleven\Main
+api: 5.0.0
