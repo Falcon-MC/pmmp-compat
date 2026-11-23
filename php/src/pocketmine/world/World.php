@@ -17,6 +17,7 @@ use pocketmine\entity\Entity;
 use pocketmine\item\Item;
 use pocketmine\math\Vector3;
 use pocketmine\player\Player;
+use pocketmine\utils\ReversePriorityQueue;
 use pocketmine\network\mcpe\NetworkBroadcastUtils;
 use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\network\mcpe\protocol\BlockActorDataPacket;
@@ -52,6 +53,12 @@ class World implements ChunkManager{
 
     private int $id;
     private bool $loaded = true;
+    /** @var array<int, array<int, ChunkListener>> */
+    private array $chunkListeners = [];
+    /** @var ReversePriorityQueue<int, Vector3> */
+    private ReversePriorityQueue $scheduledBlockUpdateQueue;
+    /** @var array<int, true> */
+    private array $scheduledBlockUpdates = [];
 
     /** @internal WorldManager makes them, one for each of Falcon's levels */
     public function __construct(
@@ -60,6 +67,8 @@ class World implements ChunkManager{
         private int $level
     ){
         $this->id = self::$nextId++;
+        $this->scheduledBlockUpdateQueue = new ReversePriorityQueue();
+        $this->scheduledBlockUpdateQueue->setExtractFlags(\SplPriorityQueue::EXTR_BOTH);
     }
 
     /** @internal the Falcon level this world stands for */
@@ -70,6 +79,10 @@ class World implements ChunkManager{
     /** @internal */
     public function onUnload() : void{
         $this->loaded = false;
+        $this->chunkListeners = [];
+        $this->scheduledBlockUpdates = [];
+        $this->scheduledBlockUpdateQueue = new ReversePriorityQueue();
+        $this->scheduledBlockUpdateQueue->setExtractFlags(\SplPriorityQueue::EXTR_BOTH);
     }
 
     public function getServer() : \pocketmine\Server{
@@ -127,7 +140,15 @@ class World implements ChunkManager{
         if(!$this->isInWorld($x, $y, $z)){
             throw new \InvalidArgumentException("Pos x=$x,y=$y,z=$z is outside of the world bounds");
         }
-        falcon_level_set_block($this->level, $x, $y, $z, $block->getFalconIdentifier(), $block->getFalconStates());
+        $listeners = $this->chunkListeners[self::chunkHash($x >> 4, $z >> 4)] ?? [];
+        $oldState = $listeners === [] ? null : $this->getBlockAt($x, $y, $z)->getStateId();
+        $changed = falcon_level_set_block($this->level, $x, $y, $z, $block->getFalconIdentifier(), $block->getFalconStates());
+        if($changed && $oldState !== null && $this->getBlockAt($x, $y, $z)->getStateId() !== $oldState){
+            $pos = new Vector3($x, $y, $z);
+            foreach($listeners as $listener){
+                $listener->onBlockChanged($pos);
+            }
+        }
     }
 
     public function setBlock(Vector3 $pos, Block $block, bool $update = true) : void{
@@ -179,6 +200,62 @@ class World implements ChunkManager{
             }
         }
         return $chunks;
+    }
+
+    public function registerChunkListener(ChunkListener $listener, int $chunkX, int $chunkZ) : void{
+        $this->chunkListeners[self::chunkHash($chunkX, $chunkZ)][spl_object_id($listener)] = $listener;
+        \pmmpcompat\Bridge::listenFor(\pocketmine\event\world\ChunkLoadEvent::class);
+        \pmmpcompat\Bridge::listenFor(\pocketmine\event\world\ChunkUnloadEvent::class);
+    }
+
+    public function unregisterChunkListener(ChunkListener $listener, int $chunkX, int $chunkZ) : void{
+        $hash = self::chunkHash($chunkX, $chunkZ);
+        unset($this->chunkListeners[$hash][spl_object_id($listener)]);
+        if(($this->chunkListeners[$hash] ?? []) === []){
+            unset($this->chunkListeners[$hash]);
+        }
+    }
+
+    /** @internal Dispatch real chunk lifecycle events for listeners registered through World. */
+    public function notifyChunkListeners(int $chunkX, int $chunkZ, Chunk $chunk, bool $loaded) : void{
+        $hash = self::chunkHash($chunkX, $chunkZ);
+        $listeners = $this->chunkListeners[$hash] ?? [];
+        if(!$loaded){
+            unset($this->chunkListeners[$hash]);
+        }
+        foreach($listeners as $listener){
+            if($loaded){
+                $listener->onChunkLoaded($chunkX, $chunkZ, $chunk);
+            }else{
+                $listener->onChunkUnloaded($chunkX, $chunkZ, $chunk);
+            }
+        }
+    }
+
+    public function scheduleDelayedBlockUpdate(Vector3 $pos, int $delay) : void{
+        if($delay < 0){
+            throw new \InvalidArgumentException("Block update delay must be non-negative");
+        }
+        $pos = $pos->floor();
+        if(!$this->isInWorld((int) $pos->x, (int) $pos->y, (int) $pos->z)){
+            return;
+        }
+        $hash = self::blockHash((int) $pos->x, (int) $pos->y, (int) $pos->z);
+        if(!isset($this->scheduledBlockUpdates[$hash])){
+            $this->scheduledBlockUpdates[$hash] = true;
+            $this->scheduledBlockUpdateQueue->insert($pos, $this->getServer()->getTick() + max(1, $delay));
+        }
+    }
+
+    /** @internal Run PHP block callbacks after plugin schedulers have observed this tick's queue. */
+    public function tickScheduledBlockUpdates(int $currentTick) : void{
+        while(!$this->scheduledBlockUpdateQueue->isEmpty() && $this->scheduledBlockUpdateQueue->top()["priority"] <= $currentTick){
+            $pos = $this->scheduledBlockUpdateQueue->extract()["data"];
+            unset($this->scheduledBlockUpdates[self::blockHash((int) $pos->x, (int) $pos->y, (int) $pos->z)]);
+            if($this->isChunkLoaded(((int) $pos->x) >> 4, ((int) $pos->z) >> 4)){
+                $this->getBlock($pos)->onScheduledUpdate();
+            }
+        }
     }
 
     public static function chunkHash(int $x, int $z) : int{

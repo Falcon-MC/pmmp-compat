@@ -337,6 +337,10 @@ final class WorldEvents{
                 falcon_event_set_result($handle, $result);
                 $state['result'] = $result;
             }
+        }elseif($last && $event instanceof ChunkLoadEvent){
+            $event->getWorld()->notifyChunkListeners($event->getChunkX(), $event->getChunkZ(), $event->getChunk(), true);
+        }elseif($last && $event instanceof ChunkUnloadEvent && !$event->isCancelled()){
+            $event->getWorld()->notifyChunkListeners($event->getChunkX(), $event->getChunkZ(), $event->getChunk(), false);
         }elseif($event instanceof WorldUnloadEvent && $last && !$event->isCancelled()){
             $state['world']->onUnload();
         }

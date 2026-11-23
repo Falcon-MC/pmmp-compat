@@ -190,6 +190,40 @@ PHP_FUNCTION(falcon_level_biome) {
     RETURN_STRING(biome != NULL ? biome : "");
 }
 
+PHP_FUNCTION(falcon_server_replace_resource_packs) {
+    HashTable *entries;
+    bool required;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_ARRAY_HT(entries)
+        Z_PARAM_BOOL(required)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_RESOURCE_PACKS
+    enum { MAX_PACKS = 128, MAX_BYTES = 128 * 1024 * 1024 };
+    const uint32_t count = zend_hash_num_elements(entries);
+    if (!FALCON_HAS(resourcePacksReplace) || count > MAX_PACKS)
+        RETURN_FALSE;
+
+    FalconResourcePackDescriptor packs[MAX_PACKS];
+    uint32_t index = 0;
+    zval *entry;
+    ZEND_HASH_FOREACH_VAL(entries, entry) {
+        if (Z_TYPE_P(entry) != IS_ARRAY)
+            RETURN_FALSE;
+        zval *data = zend_hash_index_find(Z_ARRVAL_P(entry), 0);
+        zval *key = zend_hash_index_find(Z_ARRVAL_P(entry), 1);
+        if (data == NULL || Z_TYPE_P(data) != IS_STRING || Z_STRLEN_P(data) > MAX_BYTES ||
+            key == NULL || Z_TYPE_P(key) != IS_STRING || strlen(Z_STRVAL_P(key)) != Z_STRLEN_P(key))
+            RETURN_FALSE;
+        packs[index++] = (FalconResourcePackDescriptor) {
+            Z_STRVAL_P(data), (uint32_t) Z_STRLEN_P(data), Z_STRVAL_P(key)
+        };
+    } ZEND_HASH_FOREACH_END();
+    RETURN_BOOL(falcon->resourcePacksReplace(falcon_plugin, packs, count, required ? 1 : 0) != 0);
+#else
+    RETURN_FALSE;
+#endif
+}
+
 // --- what the game knows of item and block types ---
 
 PHP_FUNCTION(falcon_register_custom_item) {
@@ -427,6 +461,7 @@ const zend_function_entry falcon_server_functions[] = {
     ENTRY(falcon_level_game_rule)
     ENTRY(falcon_level_set_game_rule)
     ENTRY(falcon_level_biome)
+    ENTRY(falcon_server_replace_resource_packs)
     ENTRY(falcon_item_info)
     ENTRY(falcon_register_custom_item)
     ENTRY(falcon_register_recipe)

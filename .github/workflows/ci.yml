@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  FALCON_REVISION: f30fe75df5f890311a0e8eb22de1262ea71ba7e0
+  FALCON_REVISION: 70f35296ec231e1711373b0efdf6761e9f7f5c73
 
 jobs:
   unix:

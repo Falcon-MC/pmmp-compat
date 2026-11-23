@@ -49,6 +49,13 @@ class WorldManager{
         return $worlds;
     }
 
+    /** @internal */
+    public function tickScheduledBlockUpdates(int $currentTick) : void{
+        foreach($this->byLevel as $world){
+            $world->tickScheduledBlockUpdates($currentTick);
+        }
+    }
+
     public function getDefaultWorld() : ?World{
         return $this->getWorldByName(falcon_default_world());
     }

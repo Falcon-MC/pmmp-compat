@@ -46,6 +46,7 @@ final class Players{
         $players = [];
         foreach(falcon_online_players() as $handle){
             $player = self::get($handle);
+            $player->spawned = true;
             $players[spl_object_id($player)] = $player;
         }
         return $players;

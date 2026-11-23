@@ -258,6 +258,7 @@ final class Bridge{
         switch($type){
             case self::PLAYER_JOIN:
                 $player = Players::get(falcon_event_player($handle));
+                $player->spawned = true;
                 PlayerHistory::recordJoin($player);
                 return ['event' => new PlayerJoinEvent($player, $message), 'message' => $message, 'recipients' => [],
                     'sender' => null];

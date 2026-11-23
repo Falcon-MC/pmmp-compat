@@ -178,6 +178,10 @@ class Block{
         return $block;
     }
 
+    /** Called on PHP-defined blocks scheduled by a plugin. Falcon ticks native blocks itself. */
+    public function onScheduledUpdate() : void{
+    }
+
     /** @internal places this object, as PocketMine-MP does when a block is read or about to be set */
     public function position(World $world, int $x, int $y, int $z) : void{
         $this->position = new Position($x, $y, $z, $world);

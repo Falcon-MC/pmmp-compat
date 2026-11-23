@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace pocketmine\data\bedrock\block;
 
 use pocketmine\block\Block;
+use pocketmine\data\bedrock\block\convert\UnsupportedBlockStateException;
 
 /** The game's saved states to block state ids */
 final class BlockStateDeserializer{
@@ -34,7 +35,7 @@ final class BlockStateDeserializer{
     }
 
     /**
-     * @throws BlockStateDeserializeException
+     * @throws BlockStateDeserializeException|UnsupportedBlockStateException
      */
     public function deserialize(BlockStateData $stateData) : int{
         return $this->deserializeBlock($stateData)->getStateId();
@@ -47,9 +48,14 @@ final class BlockStateDeserializer{
                 return $block;
             }
         }
-        if(falcon_block_network_id($stateData->getName(), $stateData->toFalconStates()) === 0){
-            throw new BlockStateDeserializeException("Unknown block state " . $stateData->getName());
+        $name = $stateData->getName();
+        $states = $stateData->toFalconStates();
+        if(falcon_block_network_id($name, $states) === 0){
+            if(\pmmpcompat\ItemTypes::block($name) === null){
+                throw new UnsupportedBlockStateException("Unknown block type " . $name);
+            }
+            throw new BlockStateDeserializeException("Invalid states for " . $name);
         }
-        return Block::fromFalcon($stateData->getName(), $stateData->toFalconStates());
+        return Block::fromFalcon($name, $states);
     }
 }

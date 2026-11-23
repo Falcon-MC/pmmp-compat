@@ -85,6 +85,7 @@ final class Runtime{
         // the server is up by the time Falcon enables this plugin: both orders run now, startup first
         $manager->enablePlugins(PluginEnableOrder::STARTUP);
         $manager->enablePlugins(PluginEnableOrder::POSTWORLD);
+        $server->getResourcePackManager()->publish();
         Bridge::listen();
         $count = count($manager->getPlugins());
         Log::info($count . ' PocketMine-MP plugin' . ($count === 1 ? '' : 's') . ' loaded'

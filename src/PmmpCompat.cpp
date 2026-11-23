@@ -119,10 +119,23 @@ private:
             visitor->setGameMode(falcon::GameMode::Adventure);
             // the Explorer plugin teleports the visitor two ticks after joining; the damage and the death wait for the
             // spawn invulnerability, 60 ticks
-            scheduler().delay(3, [visitor] { visitor->setGameMode(falcon::GameMode::Survival); });
-            scheduler().delay(65, [visitor] { visitor->entity().damage(4.0f, "death.attack.generic"); });
-            scheduler().delay(70, [visitor] { visitor->entity().kill(); });
-            scheduler().delay(75, [visitor] { visitor->kick("Bye from the test"); });
+            const auto stillPlaying = [original = visitor->handle()](const auto &action) {
+                const auto current = falcon::Server::findPlayer("Visitor");
+                if (current && current->handle() == original && current->isSimulated())
+                    action(*current);
+            };
+            scheduler().delay(3, [stillPlaying] {
+                stillPlaying([](const auto &player) { player.setGameMode(falcon::GameMode::Survival); });
+            });
+            scheduler().delay(65, [stillPlaying] {
+                stillPlaying([](const auto &player) { player.entity().damage(4.0f, "death.attack.generic"); });
+            });
+            scheduler().delay(70, [stillPlaying] {
+                stillPlaying([](const auto &player) { player.entity().kill(); });
+            });
+            scheduler().delay(75, [stillPlaying] {
+                stillPlaying([](const auto &player) { player.kick("Bye from the test"); });
+            });
         });
     }
 

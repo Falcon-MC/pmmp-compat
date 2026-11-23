@@ -95,10 +95,12 @@ class Server{
     public function tick() : void{
         ++$this->tickCounter;
         $this->pluginManager->tickSchedulers($this->tickCounter);
+        $this->worldManager->tickScheduledBlockUpdates($this->tickCounter);
         // what other threads asked for: their notifications, then the async tasks done, then their log lines
         $this->tickSleeper->processNotifications();
         $this->network?->tick();
         $this->asyncPool->collectTasks();
+        $this->resourcePackManager?->publish();
         $this->logger->flush();
         if($this->tickCounter % 1200 === 0){
             \pmmpcompat\Entities::forgetClosed();

@@ -56,6 +56,8 @@ class Player extends Human implements CommandSender, IPlayer{
     private const MAX_FORM_RESPONSE_SIZE = 10 * 1024;
     private const MAX_FORM_RESPONSE_DEPTH = 2;
 
+    /** Whether the player has entered the world, as expected by older plugins. */
+    public bool $spawned = false;
     private bool $online = true;
     private string $username;
     private string $displayName;
@@ -120,6 +122,7 @@ class Player extends Human implements CommandSender, IPlayer{
             $this->currentWindow = null;
         }
         $this->online = false;
+        $this->spawned = false;
         $this->forms = [];
     }
 
