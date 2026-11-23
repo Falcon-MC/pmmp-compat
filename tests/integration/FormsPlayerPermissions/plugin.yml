@@ -1,0 +1,17 @@
+name: FormsPlayerPermissions
+main: compatplayers\Main
+version: 1.0.0
+api: 5.0.0
+permissions:
+  fixture.always:
+    default: true
+  fixture.unspecified:
+    description: Uses the manifest default
+  fixture.child:
+    default: false
+  fixture.operator:
+    default: op
+  fixture.nonoperator:
+    default: notop
+  fixture.never:
+    default: false

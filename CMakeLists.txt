@@ -10,8 +10,7 @@ include(FetchContent)
 FetchContent_Declare(
     falcon_plugin_api
     GIT_REPOSITORY https://github.com/Falcon-MC/PluginAPI.git
-    GIT_TAG main
-    GIT_SHALLOW TRUE
+    GIT_TAG f13994cece28e4ec23cf2d112ea9c03721242ebe
 )
 set(FALCON_PLUGIN_API_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(falcon_plugin_api)

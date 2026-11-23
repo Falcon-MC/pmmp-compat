@@ -6,10 +6,13 @@ namespace pocketmine\player;
 
 use pocketmine\command\CommandSender;
 use pocketmine\entity\Human;
-use pocketmine\form\Form;
-use pocketmine\form\FormValidationException;
+use pocketmine\entity\Location;
 use pocketmine\event\inventory\InventoryCloseEvent;
 use pocketmine\event\inventory\InventoryOpenEvent;
+use pocketmine\event\player\PlayerDisplayNameChangeEvent;
+use pocketmine\event\player\PlayerKickEvent;
+use pocketmine\form\Form;
+use pocketmine\form\FormValidationException;
 use pocketmine\inventory\ArmorInventory;
 use pocketmine\inventory\Inventory;
 use pocketmine\inventory\PlayerCursorInventory;
@@ -17,8 +20,16 @@ use pocketmine\inventory\PlayerEnderInventory;
 use pocketmine\inventory\PlayerInventory;
 use pocketmine\inventory\PlayerOffHandInventory;
 use pocketmine\network\mcpe\NetworkSession;
+use pocketmine\network\mcpe\protocol\SetActorDataPacket;
+use pocketmine\network\mcpe\protocol\SetTitlePacket;
+use pocketmine\network\mcpe\protocol\TextPacket;
+use pocketmine\network\mcpe\protocol\ToastRequestPacket;
+use pocketmine\network\mcpe\protocol\types\entity\EntityMetadataProperties;
+use pocketmine\network\mcpe\protocol\types\entity\PropertySyncData;
+use pocketmine\network\mcpe\protocol\types\entity\StringMetadataProperty;
 use Ramsey\Uuid\Uuid;
 use Ramsey\Uuid\UuidInterface;
+use pocketmine\lang\KnownTranslationFactory;
 use pocketmine\lang\Language;
 use pocketmine\lang\Translatable;
 use pocketmine\permission\DefaultPermissions;
@@ -27,6 +38,8 @@ use pocketmine\permission\PermissibleDelegateTrait;
 use pocketmine\permission\Permission;
 use pocketmine\Server;
 use pocketmine\utils\TextFormat;
+use pocketmine\world\Position;
+use pocketmine\world\World;
 
 /**
  * A player on the server, standing for one of Falcon's players.
@@ -40,9 +53,15 @@ class Player extends Human implements CommandSender, IPlayer{
         isPermissionSet as private permissibleIsPermissionSet;
     }
 
+    private const MAX_FORM_RESPONSE_SIZE = 10 * 1024;
+    private const MAX_FORM_RESPONSE_DEPTH = 2;
+
     private bool $online = true;
     private string $username;
     private string $displayName;
+    private string $playerNameTag;
+    private ?Location $offlineLocation = null;
+    private GameMode $offlineGameMode = GameMode::SURVIVAL;
     private string $xuid;
     private bool $operator = false;
     private ?int $lineHeight = null;
@@ -73,6 +92,9 @@ class Player extends Human implements CommandSender, IPlayer{
         $this->networkSession = new NetworkSession($this);
         $this->username = falcon_player_name($handle);
         $this->displayName = $this->username;
+        $this->playerNameTag = $this->username;
+        $uuid = falcon_player_uuid($handle);
+        $this->uuid = Uuid::isValid($uuid) ? Uuid::fromString($uuid) : Uuid::uuid3(Uuid::NIL, $this->username);
         $this->xuid = falcon_player_xuid($handle);
         $this->perm = new PermissibleBase([DefaultPermissions::ROOT_USER => true]);
         $this->syncOperator();
@@ -83,12 +105,22 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     /** @internal the player left: nothing reaches Falcon's player from now on */
-    public function onLeave() : void{
+    public function onLeave(bool $captureState = true) : void{
+        if($captureState && $this->online){
+            $location = parent::getLocation();
+            if($location->isValid()){
+                $this->offlineLocation = $location;
+            }
+            $this->offlineGameMode = $this->getGamemode();
+        }else{
+            $this->online = false;
+        }
         if($this->currentWindow !== null){
             $this->currentWindow->onClose($this);
             $this->currentWindow = null;
         }
         $this->online = false;
+        $this->forms = [];
     }
 
     /** @internal the Falcon handle while online */
@@ -181,8 +213,7 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     public function getUniqueId() : UuidInterface{
-        $uuid = $this->online ? falcon_player_uuid($this->handle) : "";
-        return Uuid::isValid($uuid) ? Uuid::fromString($uuid) : Uuid::uuid3(Uuid::NIL, $this->username);
+        return $this->uuid;
     }
 
     /** shows the form; Falcon numbers it, and its answer comes back to handleResponse() */
@@ -191,10 +222,33 @@ class Player extends Human implements CommandSender, IPlayer{
             return;
         }
         $json = json_encode($form, JSON_THROW_ON_ERROR);
+        if(!$this->online){
+            return;
+        }
         $id = falcon_player_send_form($this->handle, $json);
         if($id !== 0){
             $this->forms[$id] = $form;
         }
+    }
+
+    /** @internal Falcon distinguishes a cancellation from an answer containing JSON */
+    public function onFalconFormResponse(int $formId, string $json, bool $cancelled) : void{
+        if(!$this->hasPendingForm($formId)){
+            return;
+        }
+        if(!$cancelled && strlen($json) > self::MAX_FORM_RESPONSE_SIZE){
+            unset($this->forms[$formId]);
+            $this->getServer()->getLogger()->warning("Response for form $formId exceeds the maximum size");
+            return;
+        }
+        try{
+            $response = $cancelled ? null : json_decode($json, true, self::MAX_FORM_RESPONSE_DEPTH, JSON_THROW_ON_ERROR);
+        }catch(\JsonException $e){
+            unset($this->forms[$formId]);
+            $this->getServer()->getLogger()->warning("Invalid JSON for form $formId: " . $e->getMessage());
+            return;
+        }
+        $this->onFormSubmit($formId, $response);
     }
 
     /** @internal the player answered or closed a form */
@@ -202,13 +256,13 @@ class Player extends Human implements CommandSender, IPlayer{
         if(!isset($this->forms[$formId])){
             return false;
         }
+        $form = $this->forms[$formId];
+        unset($this->forms[$formId]);
         try{
-            $this->forms[$formId]->handleResponse($this, $responseData);
+            $form->handleResponse($this, $responseData);
         }catch(FormValidationException $e){
-            $this->getServer()->getLogger()->critical("Failed to validate form " . get_class($this->forms[$formId]) . ": " . $e->getMessage());
+            $this->getServer()->getLogger()->critical("Failed to validate form " . get_class($form) . ": " . $e->getMessage());
             $this->getServer()->getLogger()->logException($e);
-        }finally{
-            unset($this->forms[$formId]);
         }
         return true;
     }
@@ -249,12 +303,45 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     public function setDisplayName(string $name) : void{
-        $this->displayName = $name;
+        $event = new PlayerDisplayNameChangeEvent($this, $this->displayName, $name);
+        $event->call();
+        $this->displayName = $event->getNewName();
+    }
+
+    public function getNameTag() : string{
+        return $this->playerNameTag;
+    }
+
+    public function setNameTag(string $name) : void{
+        $this->playerNameTag = $name;
+        if(!$this->online){
+            return;
+        }
+        $packet = SetActorDataPacket::create($this->getId(), [
+            EntityMetadataProperties::NAMETAG => new StringMetadataProperty($name)
+        ], new PropertySyncData([], []), $this->server->getTick());
+        foreach($this->getViewers() as $viewer){
+            if($viewer !== $this){
+                $viewer->getNetworkSession()->sendDataPacket($packet);
+            }
+        }
+    }
+
+    public function getLocation() : Location{
+        return $this->offlineLocation?->asLocation() ?? parent::getLocation();
+    }
+
+    public function getPosition() : Position{
+        return $this->offlineLocation?->asPosition() ?? parent::getPosition();
+    }
+
+    public function getWorld() : World{
+        return $this->offlineLocation?->getWorld() ?? parent::getWorld();
     }
 
     public function getGamemode() : GameMode{
         if(!$this->online){
-            return GameMode::SURVIVAL;
+            return $this->offlineGameMode;
         }
         return \pmmpcompat\Bridge::gameMode(falcon_player_game_mode($this->handle)) ?? GameMode::SURVIVAL;
     }
@@ -378,7 +465,7 @@ class Player extends Human implements CommandSender, IPlayer{
         }
         $ev = new \pocketmine\event\player\PlayerTransferEvent($this, $address, $port, $message ?? "transferred");
         $ev->call();
-        if($ev->isCancelled()){
+        if($ev->isCancelled() || !$this->online || $ev->getPort() < 1 || $ev->getPort() > 65535){
             return false;
         }
         return falcon_player_transfer($this->handle, $ev->getAddress(), $ev->getPort());
@@ -427,15 +514,15 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     public function getFirstPlayed() : ?int{
-        return null;
+        return \pmmpcompat\PlayerHistory::session($this)["first"] ?? null;
     }
 
     public function getLastPlayed() : ?int{
-        return null;
+        return \pmmpcompat\PlayerHistory::session($this)["last"] ?? null;
     }
 
     public function hasPlayedBefore() : bool{
-        return false;
+        return \pmmpcompat\PlayerHistory::session($this)["returning"] ?? false;
     }
 
     public function getArmorPoints() : int{
@@ -456,6 +543,7 @@ class Player extends Human implements CommandSender, IPlayer{
     public function setOp(bool $value) : void{
         if($this->online){
             falcon_player_set_operator($this->handle, $value);
+            $this->syncOperator();
         }
     }
 
@@ -481,12 +569,22 @@ class Player extends Human implements CommandSender, IPlayer{
 
     public function hasPermission(Permission|string $name) : bool{
         $this->syncOperator();
-        return $this->permissibleHasPermission($name);
+        if($this->permissibleIsPermissionSet($name)){
+            return $this->permissibleHasPermission($name);
+        }
+        return $this->hasAdditionalFalconPermission($name);
     }
 
     public function isPermissionSet(Permission|string $name) : bool{
         $this->syncOperator();
-        return $this->permissibleIsPermissionSet($name);
+        return $this->permissibleIsPermissionSet($name) || $this->hasAdditionalFalconPermission($name);
+    }
+
+    private function hasAdditionalFalconPermission(Permission|string $permission) : bool{
+        // Falcon also grants unknown nodes to operators. The boolean API cannot distinguish that from a group grant.
+        $name = $permission instanceof Permission ? $permission->getName() : $permission;
+        return $this->online && !$this->operator && $name !== "" && !str_contains($name, "\0")
+            && falcon_player_has_permission($this->handle, $name);
     }
 
     private function text(Translatable|string $message) : string{
@@ -494,9 +592,19 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     public function sendMessage(Translatable|string $message) : void{
-        if($this->online){
-            falcon_player_send_message($this->handle, $this->text($message));
+        if(!$this->online){
+            return;
         }
+        if($message instanceof Translatable && !$this->server->isLanguageForced()){
+            $language = $this->getLanguage();
+            $parameters = array_map(fn(Translatable|string $parameter) => $this->text($parameter), $message->getParameters());
+            $parameterCount = 0;
+            $key = $language->translateString($message->getText(), $parameters, "pocketmine.", $parameterCount);
+            $packet = TextPacket::translation($key, array_slice($parameters, 0, $parameterCount));
+        }else{
+            $packet = TextPacket::raw($this->text($message));
+        }
+        $this->networkSession->sendDataPacket($packet);
     }
 
     /**
@@ -524,47 +632,75 @@ class Player extends Human implements CommandSender, IPlayer{
         return true;
     }
 
-    /**
-     * @param int $fadeIn ticks, -1 for the client's own; Falcon shows titles with the client's timings
-     */
     public function sendTitle(string $title, string $subtitle = "", int $fadeIn = -1, int $stay = -1, int $fadeOut = -1) : void{
-        if($this->online){
-            falcon_player_send_title($this->handle, $title, $subtitle);
+        $this->setTitleDuration($fadeIn, $stay, $fadeOut);
+        if($subtitle !== ""){
+            $this->sendSubTitle($subtitle);
         }
+        $this->networkSession->sendDataPacket(SetTitlePacket::title($title));
     }
 
     public function sendSubTitle(string $subtitle) : void{
-        $this->sendTitle("", $subtitle);
+        $this->networkSession->sendDataPacket(SetTitlePacket::subtitle($subtitle));
     }
 
-    public function sendActionBarMessage(string $message) : void{
-        if($this->online){
-            falcon_player_send_action_bar($this->handle, $message);
+    public function setTitleDuration(int $fadeIn, int $stay, int $fadeOut) : void{
+        if($fadeIn >= 0 && $stay >= 0 && $fadeOut >= 0){
+            $this->networkSession->sendDataPacket(SetTitlePacket::setAnimationTimes($fadeIn, $stay, $fadeOut));
         }
     }
 
+    public function removeTitles() : void{
+        $this->networkSession->sendDataPacket(SetTitlePacket::clearTitle());
+    }
+
+    public function resetTitles() : void{
+        $this->networkSession->sendDataPacket(SetTitlePacket::resetTitleOptions());
+    }
+
+    public function sendActionBarMessage(string $message) : void{
+        $this->networkSession->sendDataPacket(SetTitlePacket::actionBarMessage($message));
+    }
+
     public function sendTip(string $message) : void{
-        $this->sendActionBarMessage($message);
+        $this->networkSession->sendDataPacket(TextPacket::tip($message));
     }
 
     public function sendPopup(string $message) : void{
-        $this->sendActionBarMessage($message);
+        $this->networkSession->sendDataPacket(TextPacket::popup($message));
+    }
+
+    public function sendToastNotification(string $title, string $body) : void{
+        $this->networkSession->sendDataPacket(ToastRequestPacket::create($title, $body));
     }
 
     /**
      * @param Translatable|string|null $quitMessage the leave message everyone sees, null for the usual one
      */
-    public function kick(Translatable|string $reason = "", Translatable|string|null $quitMessage = null) : bool{
+    public function kick(Translatable|string $reason = "", Translatable|string|null $quitMessage = null, Translatable|string|null $disconnectScreenMessage = null) : bool{
         if(!$this->online){
             return false;
         }
-        $this->quitMessage = $quitMessage;
-        falcon_player_kick($this->handle, $this->text($reason));
+        $defaultQuit = KnownTranslationFactory::multiplayer_player_left($this->getDisplayName());
+        $event = new PlayerKickEvent($this, $reason, $quitMessage ?? $defaultQuit, $disconnectScreenMessage);
+        $event->call();
+        if($event->isCancelled() || !$this->online){
+            return false;
+        }
+        $screenMessage = $event->getDisconnectScreenMessage();
+        $this->disconnect(
+            $event->getDisconnectReason(),
+            $event->getQuitMessage() === $defaultQuit ? null : $event->getQuitMessage(),
+            $screenMessage === "" ? KnownTranslationFactory::disconnectionScreen_noReason() : $screenMessage
+        );
         return true;
     }
 
-    public function disconnect(Translatable|string $reason, Translatable|string|null $quitMessage = null) : void{
-        $this->kick($reason, $quitMessage);
+    public function disconnect(Translatable|string $reason, Translatable|string|null $quitMessage = null, Translatable|string|null $disconnectScreenMessage = null) : void{
+        if($this->online){
+            $this->quitMessage = $quitMessage;
+            falcon_player_kick($this->handle, $this->text($disconnectScreenMessage ?? $reason));
+        }
     }
 
     public function getScreenLineHeight() : int{

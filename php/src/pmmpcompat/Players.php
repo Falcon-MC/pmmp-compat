@@ -23,7 +23,7 @@ final class Players{
         $player = self::$byHandle[$handle] ?? null;
         // a handle Falcon reused for someone else: the one who had it left without a leave event
         if($player !== null && $player->getName() !== falcon_player_name($handle)){
-            $player->onLeave();
+            $player->onLeave(false);
             $player = null;
         }
         return self::$byHandle[$handle] = $player ?? new Player(Server::getInstance(), $handle);

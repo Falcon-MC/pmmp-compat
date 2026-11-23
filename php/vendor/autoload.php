@@ -5,7 +5,9 @@ declare(strict_types=1);
 // what a PocketMine-MP thread loads before its class loaders, as a composer autoloader would: the bundled
 // libraries' functions; the runtime loads it on the main thread too
 require_once __DIR__ . '/symfony/deprecation-contracts/function.php';
-require_once __DIR__ . '/../src/functions/yaml.php';
+if(!function_exists('yaml_parse')){
+    require_once __DIR__ . '/../src/functions/yaml.php';
+}
 require_once __DIR__ . '/ramsey/uuid/functions.php';
 spl_autoload_register(static function(string $class) : void{
     if(str_starts_with($class, 'JsonMapper_')){

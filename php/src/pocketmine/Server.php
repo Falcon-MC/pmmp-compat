@@ -469,15 +469,15 @@ class Server{
     }
 
     public function hasOfflinePlayerData(string $name) : bool{
-        return false;
+        return $this->getOfflinePlayerData($name) !== null;
     }
 
     public function getOfflinePlayerData(string $name) : ?\pocketmine\nbt\tag\CompoundTag{
-        return null;
+        return \pmmpcompat\PlayerHistory::offline($name);
     }
 
     public function getOfflinePlayer(string $name) : Player|\pocketmine\player\OfflinePlayer|null{
-        return $this->getPlayerExact($name) ?? new \pocketmine\player\OfflinePlayer($name, null);
+        return $this->getPlayerExact($name) ?? new \pocketmine\player\OfflinePlayer($name, $this->getOfflinePlayerData($name));
     }
 
     /**

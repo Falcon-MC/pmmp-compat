@@ -22,14 +22,14 @@ for index in 0 1 2; do
     cp "$scorehud" "$texter" "$plugin/plugins/"
     port=$((19342 + 2 * index))
     printf 'server-port=%s\nserver-portv6=%s\nonline-mode=false\n' "$port" "$((port + 1))" > "$run/server.properties"
-    (cd "$run" && (sleep 8; printf 'stop\n') | STEP11_MENU="$index" PMMP_COMPAT_SELFTEST=1 "$server" --no-wizard > server.log 2>&1) &
+    STEP11_MENU="$index" python3 "$root/scripts/run-test-server.py" "$server" "$run" "$run/captured.log" &
     pids[$index]=$!
 done
 
 sizes=(27 54 5)
 for index in 0 1 2; do
     wait "${pids[$index]}"
-    log="$work/menu-$index/server.log"
+    log="$work/menu-$index/captured.log"
     size="${sizes[$index]}"
     grep -F "fixture passed $size" "$log"
     test "$(grep -Fc "fixture close $size" "$log")" -eq 1

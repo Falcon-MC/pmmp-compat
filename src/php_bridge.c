@@ -324,6 +324,11 @@ PHP_FUNCTION(falcon_player_is_op) {
     RETURN_BOOL(falcon->playerIsOperator(HANDLE(FalconPlayer, player)) != 0);
 }
 
+PHP_FUNCTION(falcon_player_has_permission) {
+    HANDLE_TEXT_ARGUMENTS(player, node);
+    RETURN_BOOL(falcon->playerHasPermission(HANDLE(FalconPlayer, player), ZSTR_VAL(node)) != 0);
+}
+
 PHP_FUNCTION(falcon_player_send_message) {
     HANDLE_TEXT_ARGUMENTS(player, message);
     falcon->playerSendMessage(HANDLE(FalconPlayer, player), ZSTR_VAL(message));
@@ -504,6 +509,7 @@ static const zend_function_entry falcon_functions[] = {
     ZEND_RAW_FENTRY("falcon_player_name", ZEND_FN(falcon_player_name), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_player_xuid", ZEND_FN(falcon_player_xuid), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_player_is_op", ZEND_FN(falcon_player_is_op), arginfo_handle_bool, 0)
+    ZEND_RAW_FENTRY("falcon_player_has_permission", ZEND_FN(falcon_player_has_permission), arginfo_handle_text_bool, 0)
     ZEND_RAW_FENTRY("falcon_player_send_message", ZEND_FN(falcon_player_send_message), arginfo_handle_text_void, 0)
     ZEND_RAW_FENTRY("falcon_player_send_title", ZEND_FN(falcon_player_send_title), arginfo_handle_two_texts_void, 0)
     ZEND_RAW_FENTRY("falcon_player_send_action_bar", ZEND_FN(falcon_player_send_action_bar), arginfo_handle_text_void, 0)

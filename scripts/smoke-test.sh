@@ -11,7 +11,8 @@ plugin="$work/plugins/pmmp-compat"
 mkdir -p "$plugin/plugins"
 cp -R "$built"/. "$plugin/"
 cp -R "$root/tests/plugins"/. "$plugin/plugins/"
-printf 'server-port=19142\nserver-portv6=19143\nonline-mode=false\n' > "$work/server.properties"
+port="${PMMP_COMPAT_TEST_PORT:-19142}"
+printf 'server-port=%s\nserver-portv6=%s\nonline-mode=false\n' "$port" "$((port + 1))" > "$work/server.properties"
 
 python=python3
 if ! "$python" -c "" 2>/dev/null; then
@@ -22,14 +23,12 @@ for phar in "$root"/tests/phar/*/; do
     "$python" "$root/scripts/make-phar.py" "$phar" "$plugin/plugins/$name.phar"
 done
 
-# the stop comes once the players test has run: it starts a second into the ticks and lasts about four
-# console lines first: CommandEvent fires for typed commands, and "blocked" is one the Ticker plugin cancels
-(cd "$work" && (sleep 9; printf 'blocked thing\ngreet from stdin\n'; sleep 1; printf 'stop\n') \
-    | PMMP_COMPAT_SELFTEST=1 "$server" --no-wizard > server.log 2>&1) || true
-log="$work/server.log"
+log="$work/captured.log"
+failed=0
+"$python" "$root/scripts/run-test-server.py" "$server" "$work" "$log" \
+    --command 'blocked thing' --command 'greet from stdin' || failed=1
 cat "$log"
 
-failed=0
 expect() {
     if ! grep -qF -- "$1" "$log"; then
         echo "missing from the log: $1"
@@ -59,6 +58,7 @@ expect "PHP still runs after the fatal error"
 expect "fixture: Beta loaded"
 expect "fixture: Beta enabled, data folder made"
 expect "fixture: Alpha enabled, Alpha's greeter says hello from Beta"
+expect "fixture: Alpha PluginManager dispatch and permission registration work"
 expect "fixture: Gamma enabled"
 expect "fixture: Dupe enabled"
 expect_before "fixture: Beta enabled" "fixture: Gamma enabled"
@@ -200,7 +200,11 @@ expect "fixture: Keeper sqlite3 reads 100"
 expect "fixture: Keeper pdo counts 1, drivers mysql,sqlite"
 expect "fixture: Keeper mysqli ready, bcmath 0.3, igbinary 1, sockets ready"
 expect "fixture: Keeper yaml reads 0, 8, '010'"
-expect 'fixture: Keeper zip reads {"format_version": 2}, leveldb reads terrain, jsonmapper maps Steve, json-comment reads 1'
+if [[ "$server" == *.exe ]] && grep -Fq "fixture: Builder zip extension unavailable on Windows" "$log"; then
+    expect "fixture: Keeper zip reads unavailable on Windows, leveldb reads terrain, jsonmapper maps Steve, json-comment reads 1"
+else
+    expect 'fixture: Keeper zip reads {"format_version": 2}, leveldb reads terrain, jsonmapper maps Steve, json-comment reads 1'
+fi
 expect "fixture: Keeper promise resolved with gold"
 expect "fixture: Keeper thread woke the server"
 expect "fixture: Keeper thread squared the sum: 100"

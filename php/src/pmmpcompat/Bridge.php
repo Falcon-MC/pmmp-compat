@@ -258,6 +258,7 @@ final class Bridge{
         switch($type){
             case self::PLAYER_JOIN:
                 $player = Players::get(falcon_event_player($handle));
+                PlayerHistory::recordJoin($player);
                 return ['event' => new PlayerJoinEvent($player, $message), 'message' => $message, 'recipients' => [],
                     'sender' => null];
             case self::PLAYER_QUIT:
@@ -419,7 +420,7 @@ final class Bridge{
                 // not an event in PocketMine-MP: the form the player answered gets the answer, once
                 if($player !== null){
                     [$formId, $response] = falcon_event_form($handle);
-                    $player->onFormSubmit($formId, json_decode($response, true));
+                    $player->onFalconFormResponse($formId, $response, falcon_event_state($handle));
                 }
                 return null;
             case self::DATA_PACKET_RECEIVE:

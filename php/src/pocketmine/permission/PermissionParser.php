@@ -84,9 +84,9 @@ class PermissionParser{
 		$result = [];
 		foreach(Utils::stringifyKeys($data) as $name => $entry){
 			$desc = null;
-			if(isset($entry[self::KEY_DEFAULT])){
-				$default = PermissionParser::defaultFromString($entry[self::KEY_DEFAULT]);
-			}
+			$entryDefault = isset($entry[self::KEY_DEFAULT])
+				? PermissionParser::defaultFromString($entry[self::KEY_DEFAULT])
+				: $default;
 
 			if(isset($entry[self::KEY_CHILDREN])){
 				throw new PermissionParserException("Nested permission declarations are no longer supported. Declare each permission separately.");
@@ -96,7 +96,7 @@ class PermissionParser{
 				$desc = $entry[self::KEY_DESCRIPTION];
 			}
 
-			$result[$default][] = new Permission($name, $desc);
+			$result[$entryDefault][] = new Permission($name, $desc);
 		}
 		return $result;
 	}

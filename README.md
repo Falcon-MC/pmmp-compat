@@ -92,6 +92,19 @@ cmake --build build
 cmake --install build --prefix dist
 ```
 
+## Testing
+
+The CI workflow builds Falcon at a pinned revision and runs the smoke suite on Linux, macOS, and Windows.
+The test server starts in a temporary directory and must stop cleanly before the test passes.
+
+```sh
+scripts/smoke-test.sh /path/to/FalconServer dist/pmmp-compat
+scripts/lifecycle-plugin-test.sh /path/to/FalconServer dist/pmmp-compat /path/to/StarterKit.phar /path/to/ScoreHud.phar
+```
+
+The lifecycle test uses StarterKit 4.0.1 and ScoreHud 8.0.0. It runs both plugins twice against the same world
+and plugin data to verify that the kit is only issued once and the scoreboard works after restarting.
+
 ## Related repositories
 
 - [Falcon](https://github.com/Falcon-MC/Falcon) - the server

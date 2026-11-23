@@ -127,6 +127,10 @@ final class Main extends PluginBase{
         });
         $this->check("old permission names", fn() => \pocketmine\permission\PermissionManager::getInstance()->getPermission("pocketmine.command.pardon") !== null);
         $this->check("zipped resource pack", function() : bool{
+            if(PHP_OS_FAMILY === "Windows" && !class_exists(\ZipArchive::class)){
+                $this->getLogger()->info("fixture: Builder zip extension unavailable on Windows");
+                return true;
+            }
             $path = $this->getDataFolder() . "pack.zip";
             @mkdir($this->getDataFolder());
             $zip = new \ZipArchive();

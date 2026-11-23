@@ -48,14 +48,17 @@ final class Main extends PluginBase{
         $logger->info("fixture: Keeper yaml reads " . var_export($yaml["decimals"], true) . ", " . var_export($yaml["mode"], true)
             . ", " . var_export($yaml["name"], true));
 
-        $zipPath = $this->getDataFolder() . "pack.zip";
-        $zip = new \ZipArchive();
-        $zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
-        $zip->addFromString("manifest.json", "{\"format_version\": 2}");
-        $zip->close();
-        $zip->open($zipPath);
-        $zipped = $zip->getFromName("manifest.json");
-        $zip->close();
+        $zipped = "unavailable on Windows";
+        if(PHP_OS_FAMILY !== "Windows" || class_exists(\ZipArchive::class)){
+            $zipPath = $this->getDataFolder() . "pack.zip";
+            $zip = new \ZipArchive();
+            $zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+            $zip->addFromString("manifest.json", "{\"format_version\": 2}");
+            $zip->close();
+            $zip->open($zipPath);
+            $zipped = $zip->getFromName("manifest.json");
+            $zip->close();
+        }
 
         $levelPath = $this->getDataFolder() . "level.db";
         $level = new \LevelDB($levelPath, ["create_if_missing" => true]);

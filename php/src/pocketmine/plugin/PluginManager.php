@@ -15,6 +15,7 @@ use pocketmine\event\plugin\PluginDisableEvent;
 use pocketmine\event\plugin\PluginEnableEvent;
 use pocketmine\event\RegisteredListener;
 use pocketmine\permission\DefaultPermissions;
+use pocketmine\permission\Permission;
 use pocketmine\permission\PermissionManager;
 use pocketmine\permission\PermissionParser;
 use pocketmine\Server;
@@ -58,6 +59,21 @@ class PluginManager{
     /** @return Plugin[] */
     public function getPlugins() : array{
         return $this->plugins;
+    }
+
+    /** @deprecated Call Event::call() instead. */
+    public function callEvent(Event $event) : void{
+        $event->call();
+    }
+
+    /** @deprecated Use PermissionManager directly. */
+    public function getPermission(string $name) : ?Permission{
+        return PermissionManager::getInstance()->getPermission($name);
+    }
+
+    /** @deprecated Use PermissionManager directly. */
+    public function addPermission(Permission $permission) : bool{
+        return PermissionManager::getInstance()->addPermission($permission);
     }
 
     public function registerInterface(PluginLoader $loader) : void{

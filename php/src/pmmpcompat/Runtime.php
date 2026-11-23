@@ -49,6 +49,7 @@ final class Runtime{
         $classes->addPath('Ramsey\\Uuid', $runtimeFolder . '/vendor/ramsey/uuid');
         $classes->addPath('Ramsey\\Collection', $runtimeFolder . '/vendor/ramsey/collection');
         $classes->addPath('Brick\\Math', $runtimeFolder . '/vendor/brick/math');
+        $classes->addPath('jojoe77777\\FormAPI', $runtimeFolder . '/vendor/jojoe77777/formapi');
         // the log library's classes are global: \Logger, \PrefixedLogger
         $classes->addPath('', $runtimeFolder . '/src/log');
         $classes->addPath('pocketmine\\snooze', $runtimeFolder . '/vendor/pocketmine/snooze');

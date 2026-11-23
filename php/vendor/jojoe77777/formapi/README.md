@@ -1,0 +1,1 @@
+FormAPI virion classes from [jojoe77777/FormAPI](https://github.com/jojoe77777/FormAPI/tree/ad0c9631b12fc37e8d9c39436d639058046b9dab), licensed under LGPL-3.0. The PocketMine plugin entry point is omitted. ModalForm accepts a null cancellation response, like SimpleForm and CustomForm.
