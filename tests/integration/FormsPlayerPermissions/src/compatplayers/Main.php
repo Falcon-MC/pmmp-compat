@@ -104,12 +104,26 @@ final class Main extends PluginBase implements Listener{
         self::check($player->isOp() && $player->hasPermission('fixture.operator') &&
             !$player->hasPermission('fixture.nonoperator') &&
             !$player->hasPermission('fixture.undeclared'), 'operator defaults');
+        $nativeApi = function_exists('falcon_player_permission_override')
+            && falcon_player_permission_override($player->getHandle(), 'fixture.group') !== null;
+        if($nativeApi){
+            self::check($player->hasPermission('fixture.group'), 'explicit group grant for an operator');
+            $hostDenied = $player->addAttachment($this, 'fixture.denied', true);
+            self::check(!$player->hasPermission('fixture.denied') && $player->isPermissionSet('fixture.denied'),
+                'explicit Falcon denial takes precedence over a local grant');
+            $player->removeAttachment($hostDenied);
+        }
         $player->setOp(false);
         self::check(!$player->isOp() && !$player->hasPermission('fixture.operator'), 'operator revocation');
 
         $this->testMessages($player);
         $this->testForms($player);
-        $this->getLogger()->info('player compatibility online passed');
+        $this->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($nativeApi) : void{
+            if(!$nativeApi){
+                self::check(array_shift($this->packets) instanceof ClientboundCloseFormPacket, 'legacy close-all packet');
+            }
+            $this->getLogger()->info('player compatibility online passed');
+        }), 2);
     }
 
     private function testMessages(Player $player) : void{
@@ -184,7 +198,6 @@ final class Main extends PluginBase implements Listener{
         }
         self::check($responses === ['button-key', false, ['input-key' => 'hello'], null], 'form response types');
         $player->closeAllForms();
-        self::check(array_shift($this->packets) instanceof ClientboundCloseFormPacket, 'close-all packet');
         $player->sendForm($simple);
         self::check($pending->getValue($player) !== [], 'form pending before disconnect');
     }

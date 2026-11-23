@@ -272,7 +272,9 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     public function closeAllForms() : void{
-        $this->networkSession->onCloseAllForms();
+        if($this->online && !falcon_player_close_forms($this->handle)){
+            $this->networkSession->onCloseAllForms();
+        }
     }
 
     /** @internal the leave message a kick asked for, once */
@@ -314,7 +316,7 @@ class Player extends Human implements CommandSender, IPlayer{
 
     public function setNameTag(string $name) : void{
         $this->playerNameTag = $name;
-        if(!$this->online){
+        if(!$this->online || falcon_player_set_name_tag($this->handle, $name)){
             return;
         }
         $packet = SetActorDataPacket::create($this->getId(), [
@@ -569,22 +571,39 @@ class Player extends Human implements CommandSender, IPlayer{
 
     public function hasPermission(Permission|string $name) : bool{
         $this->syncOperator();
+        $node = $name instanceof Permission ? $name->getName() : $name;
+        $native = $this->nativePermissionOverride($node);
+        if($native === -1){
+            return false;
+        }
+        $local = $this->getEffectivePermissions()[$node] ?? null;
+        if($local?->getAttachment() !== null){
+            return $local->getValue();
+        }
+        if($native === 1){
+            return true;
+        }
         if($this->permissibleIsPermissionSet($name)){
             return $this->permissibleHasPermission($name);
         }
-        return $this->hasAdditionalFalconPermission($name);
+        return $native === null && $this->legacyFalconPermission($node);
     }
 
     public function isPermissionSet(Permission|string $name) : bool{
         $this->syncOperator();
-        return $this->permissibleIsPermissionSet($name) || $this->hasAdditionalFalconPermission($name);
+        $node = $name instanceof Permission ? $name->getName() : $name;
+        $native = $this->nativePermissionOverride($node);
+        return $this->permissibleIsPermissionSet($name)
+            || ($native === null ? $this->legacyFalconPermission($node) : $native !== 0);
     }
 
-    private function hasAdditionalFalconPermission(Permission|string $permission) : bool{
-        // Falcon also grants unknown nodes to operators. The boolean API cannot distinguish that from a group grant.
-        $name = $permission instanceof Permission ? $permission->getName() : $permission;
-        return $this->online && !$this->operator && $name !== "" && !str_contains($name, "\0")
-            && falcon_player_has_permission($this->handle, $name);
+    private function nativePermissionOverride(string $node) : ?int{
+        return $this->online && $node !== "" && !str_contains($node, "\0")
+            ? falcon_player_permission_override($this->handle, $node) : 0;
+    }
+
+    private function legacyFalconPermission(string $node) : bool{
+        return !$this->operator && falcon_player_has_permission($this->handle, $node);
     }
 
     private function text(Translatable|string $message) : string{
