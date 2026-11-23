@@ -59,13 +59,19 @@ class AsyncPool{
 	 */
 	private array $workerStartHooks = [];
 
+	private ?int $initializingWorker = null;
+	/** @var \WeakMap<AsyncTask, true> */
+	private \WeakMap $workerStartTasks;
+
 	public function __construct(
 		protected int $size,
 		private int $workerMemoryLimit,
 		private ThreadSafeClassLoader $classLoader,
 		private ThreadSafeLogger $logger,
 		private SleeperHandler $eventLoop
-	){}
+	){
+		$this->workerStartTasks = new \WeakMap();
+	}
 
 	/**
 	 * Returns the maximum size of the pool. Note that there may be less active workers than this number.
@@ -95,7 +101,19 @@ class AsyncPool{
 		Utils::validateCallableSignature(function(int $worker) : void{}, $hook);
 		$this->workerStartHooks[spl_object_id($hook)] = $hook;
 		foreach($this->workers as $i => $worker){
-			$hook($i);
+			if(!$worker->worker->isTerminated()){
+				$this->runWorkerStartHook($hook, $i);
+			}
+		}
+	}
+
+	private function runWorkerStartHook(\Closure $hook, int $workerId) : void{
+		$previous = $this->initializingWorker;
+		$this->initializingWorker = $workerId;
+		try{
+			$hook($workerId);
+		}finally{
+			$this->initializingWorker = $previous;
 		}
 	}
 
@@ -131,7 +149,7 @@ class AsyncPool{
 			$this->workers[$workerId]->worker->start(self::WORKER_START_OPTIONS);
 
 			foreach($this->workerStartHooks as $hook){
-				$hook($workerId);
+				$this->runWorkerStartHook($hook, $workerId);
 			}
 		}elseif($this->workers[$workerId]->worker->isTerminated()){
 			$this->recoverCrashedWorker($workerId, null);
@@ -154,6 +172,14 @@ class AsyncPool{
 
 		$task->setSubmitted();
 
+		if($this->initializingWorker === $worker){
+			$entry = $this->workers[$worker];
+			if(!$entry->worker->isTerminated()){
+				$this->workerStartTasks[$task] = true;
+				$entry->submit($task);
+			}
+			return;
+		}
 		$this->getWorker($worker)->submit($task);
 	}
 
@@ -233,7 +259,8 @@ class AsyncPool{
 		$waiting = [];
 		while(!$entry->tasks->isEmpty()){
 			$task = $entry->tasks->dequeue();
-			if($task !== $crashedTask){
+			// replacement workers run their own start hooks
+			if($task !== $crashedTask && !isset($this->workerStartTasks[$task])){
 				$waiting[] = $task;
 			}
 		}
