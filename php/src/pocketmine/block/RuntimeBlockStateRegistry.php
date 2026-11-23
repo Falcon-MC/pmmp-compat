@@ -16,9 +16,14 @@ class RuntimeBlockStateRegistry{
 
     /** @var Block[] by state id */
     private array $registered = [];
+    /** @var Block[] by type id */
+    private array $typeIndex = [];
 
     public function register(Block $block) : void{
-        $this->registered[$block->getStateId()] = $block;
+        $this->typeIndex[$block->getTypeId()] = clone $block;
+        foreach($block->generateStatePermutations() as $state){
+            $this->fillStaticArrays($state->getStateId(), $state);
+        }
     }
 
     public function fromStateId(int $stateId) : Block{
@@ -32,9 +37,8 @@ class RuntimeBlockStateRegistry{
         return Block::fromFalcon($state[0], $state[1]);
     }
 
-    /** PocketMine-MP's lookup tables of block properties; Falcon keeps its own */
     public function fillStaticArrays(int $index, Block $block) : void{
-        //NOOP
+        $this->registered[$index] = clone $block;
     }
 
     public function hasStateId(int $stateId) : bool{

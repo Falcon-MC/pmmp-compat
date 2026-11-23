@@ -2,6 +2,7 @@
 #include "php_bridge_internal.h"
 
 #include <zend_API.h>
+#include <string.h>
 
 #define NAME_ARGUMENT(name) \
     zend_string *name; \
@@ -191,6 +192,60 @@ PHP_FUNCTION(falcon_level_biome) {
 
 // --- what the game knows of item and block types ---
 
+PHP_FUNCTION(falcon_register_custom_item) {
+    zend_string *identifier, *name, *icon;
+    zend_long maxStackSize;
+    ZEND_PARSE_PARAMETERS_START(4, 4)
+        Z_PARAM_PATH_STR(identifier)
+        Z_PARAM_PATH_STR(name)
+        Z_PARAM_PATH_STR(icon)
+        Z_PARAM_LONG(maxStackSize)
+    ZEND_PARSE_PARAMETERS_END();
+    if (!FALCON_HAS(registerCustomItem) || maxStackSize < 1 || maxStackSize > 64)
+        RETURN_FALSE;
+    FalconCustomItemDescriptor item = {0};
+    item.identifier = ZSTR_VAL(identifier);
+    item.displayName = ZSTR_VAL(name);
+    item.icon = ZSTR_VAL(icon);
+    item.maxStackSize = (uint32_t) maxStackSize;
+    RETURN_BOOL(falcon->registerCustomItem(falcon_plugin, &item) != 0);
+}
+
+PHP_FUNCTION(falcon_register_recipe) {
+    zend_string *identifier, *result;
+    zend_long width, height, count;
+    HashTable *inputs;
+    ZEND_PARSE_PARAMETERS_START(6, 6)
+        Z_PARAM_PATH_STR(identifier)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(height)
+        Z_PARAM_ARRAY_HT(inputs)
+        Z_PARAM_PATH_STR(result)
+        Z_PARAM_LONG(count)
+    ZEND_PARSE_PARAMETERS_END();
+    const uint32_t size = zend_hash_num_elements(inputs);
+    if (!FALCON_HAS(registerRecipe) || size == 0 || size > 9 || count < 1 || count > 64 ||
+        width < 0 || width > 3 || height < 0 || height > 3)
+        RETURN_FALSE;
+    const char *ingredients[9];
+    uint32_t index = 0;
+    zval *input;
+    ZEND_HASH_FOREACH_VAL(inputs, input) {
+        if (Z_TYPE_P(input) == IS_NULL) {
+            ingredients[index++] = NULL;
+        } else if (Z_TYPE_P(input) == IS_STRING && strlen(Z_STRVAL_P(input)) == Z_STRLEN_P(input)) {
+            ingredients[index++] = Z_STRVAL_P(input);
+        } else {
+            RETURN_FALSE;
+        }
+    } ZEND_HASH_FOREACH_END();
+    const FalconRecipeDescriptor recipe = {
+        ZSTR_VAL(identifier), width != 0, (uint32_t) width, (uint32_t) height,
+        ingredients, size, ZSTR_VAL(result), (uint32_t) count
+    };
+    RETURN_BOOL(falcon->registerRecipe(falcon_plugin, &recipe) != 0);
+}
+
 // null for an unknown identifier, or on a Falcon without it
 PHP_FUNCTION(falcon_item_info) {
     NAME_ARGUMENT(identifier);
@@ -373,6 +428,8 @@ const zend_function_entry falcon_server_functions[] = {
     ENTRY(falcon_level_set_game_rule)
     ENTRY(falcon_level_biome)
     ENTRY(falcon_item_info)
+    ENTRY(falcon_register_custom_item)
+    ENTRY(falcon_register_recipe)
     ENTRY(falcon_block_info)
     ENTRY(falcon_event_drops)
     ENTRY(falcon_event_set_drops)

@@ -187,6 +187,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_long, 0, 1, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_nullable_long, 0, 1, IS_LONG, 1)
+    ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_bool, 0, 1, _IS_BOOL, 0)
     ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
 ZEND_END_ARG_INFO()
@@ -339,6 +343,18 @@ PHP_FUNCTION(falcon_player_permission_override) {
 #ifdef FALCON_API_PLAYER_COMPATIBILITY
     if (FALCON_HAS(playerPermissionOverride))
         RETURN_LONG(falcon->playerPermissionOverride(HANDLE(FalconPlayer, player), ZSTR_VAL(node)));
+#endif
+    RETURN_NULL();
+}
+
+PHP_FUNCTION(falcon_player_ping) {
+    HANDLE_ARGUMENT(player);
+#ifdef FALCON_API_PLAYER_COMPATIBILITY
+    if (FALCON_HAS(playerPing)) {
+        const int ping = falcon->playerPing(HANDLE(FalconPlayer, player));
+        if (ping >= 0)
+            RETURN_LONG(ping);
+    }
 #endif
     RETURN_NULL();
 }
@@ -543,6 +559,7 @@ static const zend_function_entry falcon_functions[] = {
     ZEND_RAW_FENTRY("falcon_player_is_op", ZEND_FN(falcon_player_is_op), arginfo_handle_bool, 0)
     ZEND_RAW_FENTRY("falcon_player_has_permission", ZEND_FN(falcon_player_has_permission), arginfo_handle_text_bool, 0)
     ZEND_RAW_FENTRY("falcon_player_permission_override", ZEND_FN(falcon_player_permission_override), arginfo_handle_text_nullable_long, 0)
+    ZEND_RAW_FENTRY("falcon_player_ping", ZEND_FN(falcon_player_ping), arginfo_handle_nullable_long, 0)
     ZEND_RAW_FENTRY("falcon_player_close_forms", ZEND_FN(falcon_player_close_forms), arginfo_handle_bool, 0)
     ZEND_RAW_FENTRY("falcon_player_set_name_tag", ZEND_FN(falcon_player_set_name_tag), arginfo_handle_text_bool, 0)
     ZEND_RAW_FENTRY("falcon_player_send_message", ZEND_FN(falcon_player_send_message), arginfo_handle_text_void, 0)

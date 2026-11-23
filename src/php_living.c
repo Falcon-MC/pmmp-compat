@@ -120,6 +120,21 @@ PHP_FUNCTION(falcon_entity_set_attribute) {
     RETURN_BOOL(falcon->entitySetAttribute(HANDLE(FalconEntity, entity), ZSTR_VAL(name), (float) value) != 0);
 }
 
+PHP_FUNCTION(falcon_entity_set_max_health) {
+    zend_long entity;
+    double maximum;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(entity)
+        Z_PARAM_DOUBLE(maximum)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_ENTITY_MAX_HEALTH
+    RETURN_BOOL(FALCON_HAS(entitySetMaxHealth) &&
+                falcon->entitySetMaxHealth(HANDLE(FalconEntity, entity), (float) maximum) != 0);
+#else
+    RETURN_FALSE;
+#endif
+}
+
 PHP_FUNCTION(falcon_entity_set_on_fire) {
     zend_long entity, ticks;
     ZEND_PARSE_PARAMETERS_START(2, 2)
@@ -552,6 +567,7 @@ const zend_function_entry falcon_living_functions[] = {
     ENTRY(falcon_event_effect)
     ENTRY(falcon_entity_attribute)
     ENTRY(falcon_entity_set_attribute)
+    ENTRY(falcon_entity_set_max_health)
     ENTRY(falcon_entity_set_on_fire)
     ENTRY(falcon_entity_set_invisible)
     ENTRY(falcon_player_food)

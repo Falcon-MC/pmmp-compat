@@ -12,6 +12,8 @@ use pocketmine\item\ToolTier;
  * What Falcon knows of each item and block type, read once, and the PocketMine-MP item class each item gets from it.
  */
 final class ItemTypes{
+    /** @var array<string, Item> */
+    private static array $custom = [];
     /** @var array<string, array<string, mixed>|null> by identifier */
     private static array $items = [];
     /** @var array<string, array<string, mixed>|null> by identifier */
@@ -65,8 +67,29 @@ final class ItemTypes{
         return $name === null ? null : constant(ToolTier::class . "::" . $name);
     }
 
+    public static function registerCustom(string $identifier, Item $item) : void{
+        if(!isset(self::$custom[$identifier])){
+            $icon = substr($identifier, strpos($identifier, ":") + 1);
+            if(falcon_item_info($identifier) === null){
+                falcon_register_custom_item($identifier, $item->getVanillaName(), $icon, $item->getMaxStackSize());
+            }
+            $item->bindCustomIdentifier($identifier);
+            self::$custom[$identifier] = clone $item;
+            unset(self::$items[$identifier]);
+        }else{
+            $item->bindCustomIdentifier($identifier);
+        }
+    }
+
+    public static function custom(string $identifier) : ?Item{
+        return isset(self::$custom[$identifier]) ? clone self::$custom[$identifier] : null;
+    }
+
     /** a new item of that identifier, of the class PocketMine-MP gives it */
     public static function create(string $identifier) : Item{
+        if(isset(self::$custom[$identifier])){
+            return clone self::$custom[$identifier];
+        }
         $class = self::CLASSES[$identifier] ?? null;
         if($class === null){
             $info = self::item($identifier);

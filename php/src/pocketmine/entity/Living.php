@@ -181,7 +181,7 @@ abstract class Living extends Entity{
 
 	public function setMaxHealth(int $amount) : void{
 		if(!$this->isDrawnByPlugin()){
-			$this->setAttribute("minecraft:health", (float) $amount);
+			parent::setMaxHealth($amount);
 			return;
 		}
 		$this->healthAttr->setMaxValue($amount)->setDefaultValue($amount);

@@ -26,7 +26,7 @@ to take `null`, `true` and `false` mapping keys as that extension does (`""`, `1
 `Path` and `Filesystem` PocketMine-MP ships and plugins use.
 
 `php/src/log/`, `php/src/pocketmine/errorhandler/` and much of `php/src/pocketmine/` (events, commands, permissions,
-chat, translations, utils) come from PocketMine-MP 5.44.3,
+chat, crafting, translations, utils) come from PocketMine-MP 5.44.3,
 pocketmine/log 0.4.0 and pocketmine/errorhandler 0.7.1, under the LGPL v3 like this repository; their files keep their
 copyright notices. `php/resources/locale/eng.ini` is this repository's own: PocketMine-MP's translation strings are
 not bundled.
@@ -53,3 +53,8 @@ Notification callback exceptions are logged so callbacks for other notifiers sti
 [pmmp/BedrockBlockUpgradeSchema](https://github.com/pmmp/BedrockBlockUpgradeSchema)'s map of the old numeric block ids,
 and `php/resources/bedrock-data/entity_id_map.json` [pmmp/BedrockData](https://github.com/pmmp/BedrockData)'s of the old
 numeric entity ids, the versions PocketMine-MP 5.44.3 uses (CC0-1.0, their licenses beside them).
+
+The bundled recipes and block-to-item map come from [pmmp/BedrockData](https://github.com/pmmp/BedrockData/tree/bdb44a48fb6beffb6e9f6864f06d2232eb62b6a3),
+as does the flattened creative catalog (CC0-1.0). The item palette and item tags are from
+[Falcon-MC/BedrockData](https://github.com/Falcon-MC/BedrockData/tree/19ccc0acc571bf748197a44d28306a3d960df193)
+for protocol 2225 (LGPL-3.0).

@@ -56,10 +56,10 @@ class PlaySoundPacket extends DataPacket implements ClientboundPacket{
 		float $z,
 		float $volume,
 		float $pitch,
-		int $loopCount,
-		bool $bypassListenerRangeCheck,
-		?int $serverSoundHandle,
-		?float $playbackPositionSeconds,
+		int $loopCount = 0,
+		bool $bypassListenerRangeCheck = false,
+		?int $serverSoundHandle = null,
+		?float $playbackPositionSeconds = null,
 	) : self{
 		$result = new self;
 		$result->soundName = $soundName;

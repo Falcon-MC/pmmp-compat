@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\convert;
 
+use pocketmine\nbt\tag\CompoundTag;
+use pocketmine\network\mcpe\protocol\serializer\ItemTypeDictionary;
+use pocketmine\network\mcpe\protocol\types\CacheableNbt;
+use pocketmine\network\mcpe\protocol\types\ItemTypeEntry;
 use pocketmine\utils\SingletonTrait;
 
 /** Server values to the ones the protocol carries; the block ids are what plugins reach it for */
@@ -11,6 +15,7 @@ final class TypeConverter{
     use SingletonTrait;
 
     private BlockTranslator $blockTranslator;
+    private ?ItemTypeDictionary $itemTypeDictionary = null;
 
     public function __construct(){
         $this->blockTranslator = new BlockTranslator();
@@ -18,6 +23,20 @@ final class TypeConverter{
 
     public function getBlockTranslator() : BlockTranslator{
         return $this->blockTranslator;
+    }
+
+    public function getItemTypeDictionary() : ItemTypeDictionary{
+        if($this->itemTypeDictionary === null){
+            $file = \pocketmine\BEDROCK_DATA_PATH . "item_palette.json";
+            $palette = json_decode(file_get_contents($file), true, flags: JSON_THROW_ON_ERROR);
+            $entries = [];
+            $emptyComponents = new CacheableNbt(CompoundTag::create());
+            foreach($palette["items"] as $entry){
+                $entries[] = new ItemTypeEntry($entry["name"], $entry["id"], $entry["component_based"], $entry["version"], $emptyComponents);
+            }
+            $this->itemTypeDictionary = new ItemTypeDictionary($entries);
+        }
+        return $this->itemTypeDictionary;
     }
 
     private ?SkinAdapter $skinAdapter = null;

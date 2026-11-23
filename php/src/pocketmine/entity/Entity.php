@@ -648,7 +648,11 @@ abstract class Entity{
 	}
 
 	public function setMaxHealth(int $amount) : void{
-		$this->maxHealth = $amount;
+		if($this->drawn){
+			$this->maxHealth = $amount;
+		}elseif(($handle = $this->getEntityHandle()) !== 0){
+			falcon_entity_set_max_health($handle, $amount);
+		}
 	}
 
 	public function setLastDamageCause(EntityDamageEvent $type) : void{

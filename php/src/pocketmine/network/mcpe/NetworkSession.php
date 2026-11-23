@@ -38,6 +38,10 @@ class NetworkSession{
         return $this->player->isOnline();
     }
 
+    public function getPing() : int{
+        return $this->player->getPing() ?? 0;
+    }
+
     public function getDisplayName() : string{
         return $this->player->getName();
     }

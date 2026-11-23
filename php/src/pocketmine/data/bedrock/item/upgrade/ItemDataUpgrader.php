@@ -9,14 +9,18 @@ use pocketmine\data\bedrock\item\SavedItemStackData;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\tag\StringTag;
 
-/** Saved items of older games to the current form: names pass through, old numeric ids are not known any more */
+/** Saved items of older games to the current form. */
 final class ItemDataUpgrader{
     public function upgradeItemTypeDataString(string $rawNameId, int $meta, int $count, ?CompoundTag $nbt) : SavedItemStackData{
         return new SavedItemStackData(new SavedItemData($rawNameId, $meta, null, $nbt), $count, null, null, [], []);
     }
 
     public function upgradeItemTypeDataInt(int $legacyNumericId, int $meta, int $count, ?CompoundTag $nbt) : SavedItemStackData{
-        throw new \pocketmine\data\bedrock\item\ItemTypeDeserializeException("Numeric item ids are not known any more ($legacyNumericId)");
+        $name = LegacyItemIdToStringIdMap::getInstance()->legacyToString($legacyNumericId);
+        if($name === null){
+            throw new \pocketmine\data\bedrock\item\ItemTypeDeserializeException("Unknown legacy item ID $legacyNumericId");
+        }
+        return $this->upgradeItemTypeDataString($name, $meta, $count, $nbt);
     }
 
     public function upgradeItemStackNbt(CompoundTag $tag) : ?SavedItemStackData{

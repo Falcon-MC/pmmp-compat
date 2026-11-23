@@ -512,7 +512,7 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     public function getPing() : ?int{
-        return null;
+        return $this->online ? falcon_player_ping($this->handle) : null;
     }
 
     public function getFirstPlayed() : ?int{

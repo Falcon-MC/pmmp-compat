@@ -12,6 +12,8 @@ use pocketmine\command\CommandSender;
 use pocketmine\command\PluginCommand;
 use pocketmine\command\SimpleCommandMap;
 use pocketmine\console\ConsoleCommandSender;
+use pocketmine\crafting\CraftingManager;
+use pocketmine\crafting\CraftingManagerFromDataHelper;
 use pocketmine\lang\Language;
 use pocketmine\lang\Translatable;
 use pocketmine\network\mcpe\NetworkBroadcastUtils;
@@ -43,6 +45,7 @@ class Server{
     private AsyncPool $asyncPool;
     private \pocketmine\snooze\SleeperHandler $tickSleeper;
     private WorldManager $worldManager;
+    private ?CraftingManager $craftingManager = null;
     private int $tickCounter = 0;
 
     public static function getInstance() : Server{
@@ -50,6 +53,12 @@ class Server{
             throw new \LogicException("the server is not started yet");
         }
         return self::$instance;
+    }
+
+    public function getCraftingManager() : CraftingManager{
+        $this->craftingManager ??= CraftingManagerFromDataHelper::make(BEDROCK_DATA_PATH . "recipes");
+        $this->craftingManager->publishPluginRecipes();
+        return $this->craftingManager;
     }
 
     /** @internal the runtime makes the one server */

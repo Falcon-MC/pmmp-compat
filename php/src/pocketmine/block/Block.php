@@ -18,6 +18,8 @@ use pocketmine\world\World;
 class Block{
     /** @var array<int, array{string, string}> the state ids given out, for the network ids plugins ask for */
     private static array $statesById = [];
+    /** @var array<int, string> */
+    private static array $vanillaIdentifiers = [];
 
     protected Position $position;
     /** @var array<string, bool|int|string> */
@@ -43,10 +45,14 @@ class Block{
             $this->typeInfo = $fallbackName instanceof BlockTypeInfo ? $fallbackName : null;
             $this->fallbackName = is_string($states) ? $states : "";
             $states = [];
-            $identifier = "pmmpcompat:block_" . $this->idInfo->getBlockTypeId();
+            $typeId = $identifier->getBlockTypeId();
+            $identifier = self::$vanillaIdentifiers[$typeId] ?? "pmmpcompat:block_" . $typeId;
         }elseif(is_string($states)){
             $this->fallbackName = $states;
             $states = [];
+        }
+        if(str_starts_with($identifier, "minecraft:")){
+            self::$vanillaIdentifiers[crc32($identifier)] ??= $identifier;
         }
         $this->identifier = $identifier;
         if(!is_string($this->fallbackName) || $this->fallbackName === ""){
@@ -304,7 +310,11 @@ class Block{
 
     /** the item that places this block, air when none does */
     public function asItem() : Item{
-        return VanillaItems::fromIdentifier($this->identifier) ?? VanillaItems::AIR();
+        $item = VanillaItems::fromIdentifier($this->identifier) ?? VanillaItems::AIR();
+        if($item instanceof \pocketmine\item\ItemBlock && $this->idInfo !== null){
+            $item->bindBlock($this);
+        }
+        return $item;
     }
 
     public function __toString() : string{

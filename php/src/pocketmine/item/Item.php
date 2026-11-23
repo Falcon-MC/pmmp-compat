@@ -100,7 +100,7 @@ class Item implements \JsonSerializable{
     public static function nbtDeserialize(CompoundTag $tag) : Item{
         $name = $tag->getTag(self::TAG_NAME);
         $identifier = $name instanceof \pocketmine\nbt\tag\StringTag ? $name->getValue() : "";
-        $item = VanillaItems::fromIdentifier($identifier) ?? ($identifier !== "" && str_starts_with($identifier, "pmmpcompat:")
+        $item = \pmmpcompat\ItemTypes::custom($identifier) ?? VanillaItems::fromIdentifier($identifier) ?? ($identifier !== "" && str_starts_with($identifier, "pmmpcompat:")
             ? new Item($identifier) : VanillaItems::AIR());
         $item->setCount(\pocketmine\utils\Binary::unsignByte($tag->getByte(self::TAG_COUNT, 1)));
         $item->damage = max(0, $tag->getShort(self::TAG_DAMAGE, 0));
@@ -155,6 +155,11 @@ class Item implements \JsonSerializable{
     /** @internal the game's identifier */
     public function getFalconIdentifier() : string{
         return $this->identifier;
+    }
+
+    /** @internal bind an item prototype to its registered identifier. */
+    public function bindCustomIdentifier(string $identifier) : void{
+        $this->identifier = $identifier;
     }
 
     public function getTypeId() : int{
