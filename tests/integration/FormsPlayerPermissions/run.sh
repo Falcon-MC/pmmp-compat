@@ -18,6 +18,10 @@ python="${PYTHON:-python3}"
 if [[ -z "${PYTHON:-}" ]] && ! "$python" -c "" 2>/dev/null; then
     python=python
 fi
-"$python" "$root/scripts/run-test-server.py" "$1" "$work" "$work/captured.log"
-grep -F '[FormsPlayerPermissions] player compatibility online passed' "$work/captured.log"
-grep -F '[FormsPlayerPermissions] player compatibility offline passed' "$work/captured.log"
+log="$work/captured.log"
+if ! "$python" "$root/scripts/run-test-server.py" "$1" "$work" "$log" ||
+    ! grep -F '[FormsPlayerPermissions] player compatibility online passed' "$log" ||
+    ! grep -F '[FormsPlayerPermissions] player compatibility offline passed' "$log"; then
+    cat "$log"
+    exit 1
+fi

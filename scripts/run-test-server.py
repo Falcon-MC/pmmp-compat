@@ -45,7 +45,8 @@ def run(server, directory, log, seconds, commands):
                     process.stdin.flush()
                     time.sleep(0.25)
                 process.stdin.write("stop\n")
-                process.stdin.flush()
+                # EOF releases Falcon's detached console reader, which can block process exit on Windows.
+                process.stdin.close()
                 if process.wait(timeout=15) != 0:
                     raise RuntimeError(f"Server stop failed ({process.returncode})")
             finally:
