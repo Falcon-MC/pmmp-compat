@@ -79,6 +79,18 @@ plugins/
 Each plugin's data folder is `plugins/pmmp-compat/plugin_data/<name>/`, as PocketMine-MP lays it out, so
 existing `config.yml` files can be copied over.
 
+### ProperDuels 3.0.0
+
+The original Poggit release repeats the SQLite `Kits.Enabled` migration on restart. Create a patched
+copy with PHP CLI and Phar enabled:
+
+```sh
+php -d phar.readonly=0 scripts/patch-properduels.php ProperDuels_3.0.0.phar ProperDuels_3.0.0-patched.phar
+```
+
+Stop the server and replace the original PHAR in the plugins folder with the patched copy. Keep the
+existing `plugin_data/ProperDuels` directory so the plugin can reuse its database.
+
 ## Building
 
 Requires CMake 3.16+, a C++20 compiler and the thread-safe PHP 8 embed library the scripts set up:
