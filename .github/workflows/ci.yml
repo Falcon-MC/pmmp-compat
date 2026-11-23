@@ -39,8 +39,10 @@ jobs:
         id: php
         uses: actions/cache@v4
         with:
-          path: .toolchain/php
-          key: php-${{ matrix.name }}-${{ hashFiles('scripts/build-php.sh') }}
+          path: |
+            .toolchain/php
+            .toolchain/deps
+          key: php-with-deps-${{ matrix.name }}-${{ hashFiles('scripts/build-php.sh') }}
 
       - name: Build PHP
         if: steps.php.outputs.cache-hit != 'true'
