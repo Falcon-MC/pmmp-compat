@@ -530,6 +530,8 @@ static PHP_MINIT_FUNCTION(falcon) {
         return FAILURE;
     if (zend_register_functions(NULL, falcon_server_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
         return FAILURE;
+    if (zend_register_functions(NULL, falcon_entity_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
+        return FAILURE;
     return encoding_module_entry.module_startup_func(type, module_number);
 }
 

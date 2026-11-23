@@ -8,7 +8,7 @@ use pocketmine\entity\Entity;
 
 /** One of Falcon's projectiles: an arrow, a snowball, a trident... Falcon moves it and makes it hit */
 abstract class Projectile extends Entity{
-    private ?int $ownerId = null;
+    protected ?int $ownerId = null;
     protected float $damage = 0.0;
 
     /** @internal who shot it, as Falcon's launch event tells */

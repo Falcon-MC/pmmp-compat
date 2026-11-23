@@ -31,4 +31,20 @@ final class NetworkBroadcastUtils{
         }
         return $sent;
     }
+
+    /**
+     * @param Player[] $recipients
+     * @phpstan-param \Closure(EntityEventBroadcaster, array<int, NetworkSession>) : void $callback
+     */
+    public static function broadcastEntityEvent(array $recipients, \Closure $callback) : void{
+        $sessions = [];
+        foreach($recipients as $player){
+            if($player->isConnected()){
+                $sessions[] = $player->getNetworkSession();
+            }
+        }
+        if(count($sessions) > 0){
+            $callback(StandardEntityEventBroadcaster::shared(), $sessions);
+        }
+    }
 }

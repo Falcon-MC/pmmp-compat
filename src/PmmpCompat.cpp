@@ -31,6 +31,12 @@ namespace {
 
 class PmmpCompat : public falcon::Plugin {
 public:
+    void onLoad() override {
+        // custom types are taken before the worlds load, and the saved plugin entities come back with them
+        if (pmmp_register_entity_type(&falcon::detail::api(), falcon::detail::plugin()) == 0)
+            logger().warning("this Falcon cannot run entities PocketMine-MP plugins define");
+    }
+
     bool onEnable() override {
         activeLogger = &logger();
         // the library sits beside the plugins/ and plugin_data/ folders, one up from the data folder

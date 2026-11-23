@@ -32,13 +32,15 @@ class ArmorInventory extends FalconSlotsInventory{
 
     protected function readSlot(int $index) : ?array{
         $handle = $this->handle();
-        return $handle === 0 ? null : falcon_player_armor_item($handle, $index);
+        return $handle === 0 ? ($this->holder instanceof Player ? null : $this->kept[$index] ?? null) : falcon_player_armor_item($handle, $index);
     }
 
     protected function writeSlot(int $index, array $item) : void{
         $handle = $this->handle();
         if($handle !== 0){
             falcon_player_set_armor_item($handle, $index, $item);
+        }elseif(!$this->holder instanceof Player){
+            $this->kept[$index] = $item;
         }
     }
 

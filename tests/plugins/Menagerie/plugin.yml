@@ -1,0 +1,4 @@
+name: Menagerie
+version: 1.0.0
+main: menagerie\Main
+api: 5.0.0

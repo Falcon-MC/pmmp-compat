@@ -43,6 +43,10 @@ size_t pmmp_php_memory(int peak);
 
 void pmmp_php_stop(void);
 
+// in onLoad, before the worlds load: the entity type PocketMine-MP plugins' entities stand on; 0 when this Falcon
+// cannot let PHP draw entities
+int pmmp_register_entity_type(const FalconServerApi *api, FalconPlugin *plugin);
+
 #ifdef __cplusplus
 }
 #endif

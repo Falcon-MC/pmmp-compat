@@ -109,6 +109,8 @@ final class Runtime{
 
     public static function stop() : void{
         self::$plugins?->disablePlugins();
+        // the worlds are saved after the plugins stop, as on PocketMine-MP: their entities go with them
+        Entities::saveAll();
         if(self::$plugins !== null){
             $server = Server::getInstance();
             try{

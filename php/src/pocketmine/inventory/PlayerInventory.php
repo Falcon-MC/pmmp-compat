@@ -33,13 +33,15 @@ class PlayerInventory extends FalconSlotsInventory{
 
     protected function readSlot(int $index) : ?array{
         $handle = $this->handle();
-        return $handle === 0 ? null : falcon_player_inventory_item($handle, $index);
+        return $handle === 0 ? ($this->holder instanceof Player ? null : $this->kept[$index] ?? null) : falcon_player_inventory_item($handle, $index);
     }
 
     protected function writeSlot(int $index, array $item) : void{
         $handle = $this->handle();
         if($handle !== 0){
             falcon_player_set_inventory_item($handle, $index, $item);
+        }elseif(!$this->holder instanceof Player){
+            $this->kept[$index] = $item;
         }
     }
 
@@ -58,9 +60,12 @@ class PlayerInventory extends FalconSlotsInventory{
         return $this->getItem($hotbarSlot);
     }
 
+    /** the held slot of an entity a plugin made, which no client picks */
+    private int $heldIndex = 0;
+
     public function getHeldItemIndex() : int{
         $handle = $this->handle();
-        return $handle === 0 ? 0 : falcon_player_selected_slot($handle);
+        return $handle === 0 ? $this->heldIndex : falcon_player_selected_slot($handle);
     }
 
     public function setHeldItemIndex(int $hotbarSlot) : void{
@@ -69,6 +74,8 @@ class PlayerInventory extends FalconSlotsInventory{
         $handle = $this->handle();
         if($handle !== 0){
             falcon_player_set_selected_slot($handle, $hotbarSlot);
+        }else{
+            $this->heldIndex = $hotbarSlot;
         }
         foreach($this->heldItemIndexChangeListeners as $callback){
             $callback($old);

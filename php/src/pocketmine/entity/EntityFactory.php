@@ -7,7 +7,6 @@ namespace pocketmine\entity;
 use DaveRandom\CallbackValidator\CallbackType;
 use DaveRandom\CallbackValidator\ParameterType;
 use DaveRandom\CallbackValidator\ReturnType;
-use pmmpcompat\Log;
 use pocketmine\data\SavedDataLoadingException;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\tag\StringTag;
@@ -18,8 +17,8 @@ use pocketmine\world\World;
 /**
  * Where plugins register the entity classes they make, with the save names their data goes by.
  *
- * The register is kept as PocketMine-MP keeps it, so the plugins that register at startup start. An entity a plugin
- * defines in PHP is not one of Falcon's: making one from its data gives nothing yet, which createFromData() logs.
+ * The register is kept as PocketMine-MP keeps it. The entities it makes run in PHP as on PocketMine-MP, drawn for
+ * clients by PHP; Falcon saves them with their chunk and they are made again from that data when it loads.
  */
 final class EntityFactory{
     use SingletonTrait;
@@ -31,8 +30,6 @@ final class EntityFactory{
     private array $creationFuncs = [];
     /** @var string[] the first save name of each class */
     private array $saveNames = [];
-    /** @var array<string, true> the classes whose creation was refused once, logged once */
-    private array $refused = [];
 
     /**
      * @param string[] $saveNames
@@ -68,12 +65,14 @@ final class EntityFactory{
         if(!$saveId instanceof StringTag || !isset($this->creationFuncs[$saveId->getValue()])){
             return null;
         }
-        $name = $saveId->getValue();
-        if(!isset($this->refused[$name])){
-            $this->refused[$name] = true;
-            Log::warning("An entity saved as $name was not made: entities defined by PocketMine-MP plugins do not run on Falcon yet");
+        $func = $this->creationFuncs[$saveId->getValue()];
+        try{
+            /** @var Entity $entity */
+            $entity = $func($world, $nbt);
+        }catch(\InvalidArgumentException|\TypeError $e){
+            throw new SavedDataLoadingException($e->getMessage(), 0, $e);
         }
-        return null;
+        return $entity;
     }
 
     public function injectSaveId(string $class, CompoundTag $saveData) : void{

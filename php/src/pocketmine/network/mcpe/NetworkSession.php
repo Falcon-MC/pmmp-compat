@@ -66,6 +66,14 @@ class NetworkSession{
         return falcon_player_send_packet($this->player->getHandle(), $id, $payload);
     }
 
+    public function getEntityEventBroadcaster() : EntityEventBroadcaster{
+        return StandardEntityEventBroadcaster::shared();
+    }
+
+    public function getTypeConverter() : \pocketmine\network\mcpe\convert\TypeConverter{
+        return \pocketmine\network\mcpe\convert\TypeConverter::getInstance();
+    }
+
     /** @internal */
     public function onCloseAllForms() : void{
         $this->sendDataPacket(ClientboundCloseFormPacket::create());

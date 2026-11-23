@@ -292,6 +292,32 @@ class World implements ChunkManager{
     }
 
     /**
+     * The boxes of the blocks in the box that entities collide with, as Falcon has them.
+     *
+     * @return AxisAlignedBB[]
+     */
+    public function getBlockCollisionBoxes(AxisAlignedBB $bb) : array{
+        $boxes = [];
+        foreach(falcon_level_collision_boxes($this->level, $bb->minX, $bb->minY, $bb->minZ, $bb->maxX, $bb->maxY, $bb->maxZ) as [$minX, $minY, $minZ, $maxX, $maxY, $maxZ]){
+            $boxes[] = new AxisAlignedBB($minX, $minY, $minZ, $maxX, $maxY, $maxZ);
+        }
+        return $boxes;
+    }
+
+    /**
+     * @return AxisAlignedBB[]
+     */
+    public function getCollisionBoxes(Entity $entity, AxisAlignedBB $bb, bool $entities = true) : array{
+        $boxes = $this->getBlockCollisionBoxes($bb);
+        if($entities){
+            foreach($this->getCollidingEntities($bb->expandedCopy(0.25, 0.25, 0.25), $entity) as $other){
+                $boxes[] = clone $other->getBoundingBox();
+            }
+        }
+        return $boxes;
+    }
+
+    /**
      * @return Entity[]
      */
     public function getCollidingEntities(AxisAlignedBB $bb, ?Entity $entity = null) : array{

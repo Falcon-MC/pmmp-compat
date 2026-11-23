@@ -48,10 +48,10 @@ class Player extends Human implements CommandSender, IPlayer{
     private ?int $lineHeight = null;
     /** what the next leave message is to be, when a kick names one */
     private Translatable|string|null $quitMessage = null;
-    private PlayerInventory $inventory;
-    private ArmorInventory $armorInventory;
-    private PlayerOffHandInventory $offHandInventory;
-    private PlayerEnderInventory $enderInventory;
+    protected PlayerInventory $inventory;
+    protected ArmorInventory $armorInventory;
+    protected PlayerOffHandInventory $offHandInventory;
+    protected PlayerEnderInventory $enderInventory;
     private PlayerCursorInventory $cursorInventory;
     private ?Inventory $currentWindow = null;
     private NetworkSession $networkSession;
@@ -60,10 +60,11 @@ class Player extends Human implements CommandSender, IPlayer{
 
     /** @internal the runtime makes one for each of Falcon's players */
     public function __construct(
-        private Server $server,
+        Server $server,
         private int $handle
     ){
         parent::__construct(falcon_entity_runtime_id(falcon_player_entity($handle)));
+        $this->server = $server;
         $this->inventory = new PlayerInventory($this);
         $this->armorInventory = new ArmorInventory($this);
         $this->offHandInventory = new PlayerOffHandInventory($this);
@@ -157,6 +158,11 @@ class Player extends Human implements CommandSender, IPlayer{
         $this->networkSession->getInvManager()->onCurrentWindowRemove();
         $this->currentWindow = null;
         (new InventoryCloseEvent($window, $this))->call();
+    }
+
+    /** whether the client holds that chunk of the player's world, so entities in it can be shown */
+    public function hasReceivedChunk(int $chunkX, int $chunkZ) : bool{
+        return $this->online && falcon_player_has_chunk($this->handle, $chunkX, $chunkZ);
     }
 
     public function getNetworkSession() : NetworkSession{
@@ -284,8 +290,8 @@ class Player extends Human implements CommandSender, IPlayer{
         return $this->xuid !== "";
     }
 
-    private bool $sneaking = false;
-    private bool $sprinting = false;
+    protected bool $sneaking = false;
+    protected bool $sprinting = false;
     private bool $flying = false;
     private bool $allowFlight = false;
     private int $viewDistance = 8;

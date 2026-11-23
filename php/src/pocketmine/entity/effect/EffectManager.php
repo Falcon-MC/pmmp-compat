@@ -28,6 +28,10 @@ class EffectManager extends EffectCollection{
 
     /** Falcon's list, the instances kept when their effect is still there */
     private function sync() : void{
+        // a plugin's own entity keeps its effects here: Falcon runs none for it
+        if($this->entity->isDrawnByPlugin()){
+            return;
+        }
         $handle = $this->entity->getEntityHandle();
         if($handle === 0){
             return;
@@ -92,7 +96,7 @@ class EffectManager extends EffectCollection{
             return;
         }
         $id = EffectIdMap::getInstance()->toId($effectType);
-        $handle = $this->entity->getEntityHandle();
+        $handle = $this->entity->isDrawnByPlugin() ? 0 : $this->entity->getEntityHandle();
         if($handle !== 0){
             falcon_entity_remove_effect($handle, $id);
         }
@@ -108,6 +112,9 @@ class EffectManager extends EffectCollection{
         $ev->call();
         if($ev->isCancelled()){
             return false;
+        }
+        if($this->entity->isDrawnByPlugin()){
+            return parent::add($effect);
         }
         $handle = $this->entity->getEntityHandle();
         if($handle === 0){
@@ -128,6 +135,17 @@ class EffectManager extends EffectCollection{
 
     /** Falcon ticks the effects; this only tells whether any is left */
     public function tick(int $tickDiff = 1) : bool{
+        if($this->entity->isDrawnByPlugin()){
+            foreach($this->effects as $instance){
+                if($instance->isInfinite()){
+                    continue;
+                }
+                $instance->decreaseDuration($tickDiff);
+                if($instance->hasExpired()){
+                    $this->remove($instance->getType());
+                }
+            }
+        }
         return count($this->all()) > 0;
     }
 }

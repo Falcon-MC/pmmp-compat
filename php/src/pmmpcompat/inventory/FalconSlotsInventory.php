@@ -17,6 +17,9 @@ abstract class FalconSlotsInventory extends BaseInventory{
     /** what an empty slot is written as */
     protected const EMPTY = ["id" => "minecraft:air", "count" => 0, "damage" => 0, "nbt" => ""];
 
+    /** @var array<int, array{id: string, count: int, damage: int, nbt: string}> what an entity a plugin made holds: Falcon keeps nothing for it */
+    protected array $kept = [];
+
     /** @return array{id: string, count: int, damage: int, nbt: string}|null */
     abstract protected function readSlot(int $index) : ?array;
 

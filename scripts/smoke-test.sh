@@ -80,7 +80,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "15 PocketMine-MP plugins loaded, 9 could not be"
+expect "16 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -177,6 +177,12 @@ expect "fixture: Wanderer xp level 3"
 expect "fixture: Wanderer skin known"
 expect "fixture: Wanderer played a sound and a particle"
 expect "fixture: Wanderer death drops"
+
+# entities a plugin defines: PHP runs and draws them, a Falcon stand-in takes hits
+expect "fixture: Menagerie registered Dummy"
+expect "fixture: Menagerie Dummy ticked on its own"
+expect "fixture: Menagerie Dummy was hurt by Falcon's explosion"
+expect "fixture: Menagerie 14 of 14 checks passed"
 expect "fixture: Wanderer kept Blade after death"
 
 # databases, threads, the server's sleeper and promises

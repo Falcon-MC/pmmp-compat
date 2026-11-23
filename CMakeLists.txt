@@ -34,6 +34,7 @@ falcon_add_plugin(PmmpCompat
     src/php_world.c
     src/php_living.c
     src/php_server.c
+    src/php_entity.c
     src/php_watchdog.c
     third_party/ext-encoding/encoding.cpp
     third_party/ext-encoding/classes/ByteBufferReader.cpp

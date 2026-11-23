@@ -175,6 +175,26 @@ final class Bridge{
         }
     }
 
+    /** @internal an entity a plugin made exists: hits on it have to reach its attack() */
+    public static function listenForDrawnEntities() : void{
+        self::listenTo(self::ENTITY_DAMAGE);
+    }
+
+    /** @internal a player clicked an entity a plugin made */
+    public static function entityInteract(int $entityHandle, int $playerHandle) : bool{
+        try{
+            $entity = Entities::drawnBy($entityHandle);
+            if($entity === null || $entity->isClosed()){
+                return false;
+            }
+            return $entity->onInteract(Players::get($playerHandle), $entity->getPosition());
+        }catch(\Throwable $e){
+            Log::critical('An entity of a plugin could not take a click: ' . $e->getMessage());
+            Log::exception($e);
+            return false;
+        }
+    }
+
     /** @internal a plugin window closed, whoever closed it */
     public static function windowClosed(int $playerHandle, int $windowId) : void{
         try{
@@ -192,6 +212,7 @@ final class Bridge{
                 $player->getNetworkSession()->getInvManager()?->takeMoves();
             }
             Server::getInstance()->tick();
+            Entities::tickDrawn(Server::getInstance()->getTick());
         }catch(\Throwable $e){
             Log::critical('A tick of the PocketMine-MP plugins failed: ' . $e->getMessage());
             Log::exception($e);
@@ -323,11 +344,20 @@ final class Bridge{
                     ? new EntityDamageByEntityEvent(Entities::get($attackerHandle), $entity, $cause, $amount, [],
                         $knockback[0] ?? Living::DEFAULT_KNOCKBACK_FORCE, $knockback[1] ?? Living::DEFAULT_KNOCKBACK_VERTICAL_LIMIT)
                     : new EntityDamageEvent($entity, $cause, $amount);
+                if($entity->isDrawnByPlugin()){
+                    // PHP hurts it, as on PocketMine-MP: its attack() decides, Falcon's stand-in takes nothing
+                    $refused = falcon_event_is_cancelled($handle);
+                    falcon_event_set_cancelled($handle, true);
+                    if(!$refused){
+                        $entity->attack($event);
+                    }
+                    return null;
+                }
                 $entity->setLastDamageCause($event);
                 return self::state($event, $message, $handle) + ['amount' => $amount, 'knockback' => $knockback];
             case self::ENTITY_DEATH:
                 $entity = self::eventEntity($handle);
-                if(!$entity instanceof Living || $entity instanceof Player){
+                if(!$entity instanceof Living || $entity instanceof Player || $entity->isDrawnByPlugin()){
                     return null;
                 }
                 [$drops, $xp] = self::drops($handle);

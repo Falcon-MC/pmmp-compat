@@ -26,13 +26,15 @@ final class PlayerOffHandInventory extends FalconSlotsInventory{
 
     protected function readSlot(int $index) : ?array{
         $handle = $this->handle();
-        return $handle === 0 ? null : falcon_player_offhand_item($handle);
+        return $handle === 0 ? ($this->holder instanceof Player ? null : $this->kept[$index] ?? null) : falcon_player_offhand_item($handle);
     }
 
     protected function writeSlot(int $index, array $item) : void{
         $handle = $this->handle();
         if($handle !== 0){
             falcon_player_set_offhand_item($handle, $item);
+        }elseif(!$this->holder instanceof Player){
+            $this->kept[$index] = $item;
         }
     }
 

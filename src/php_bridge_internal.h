@@ -40,3 +40,6 @@ extern const zend_function_entry falcon_living_functions[];
 
 // bans, the allow list, the MOTD, slots, ticks, difficulty and game rules
 extern const zend_function_entry falcon_server_functions[];
+
+// the entities PocketMine-MP plugins define, which PHP draws for clients
+extern const zend_function_entry falcon_entity_functions[];
