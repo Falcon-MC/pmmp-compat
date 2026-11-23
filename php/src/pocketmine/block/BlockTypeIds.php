@@ -815,8 +815,12 @@ final class BlockTypeIds{
     public const AZALEA = 3759377056;
     public const FLOWERING_AZALEA = 1516185789;
 
-    public const FIRST_UNUSED_BLOCK_ID = 8589934592;
+    public const FIRST_UNUSED_BLOCK_ID = 2146435072;
 
+    /**
+     * the ids given to plugins' types count up from just under 2^31: they fit in the 32-bit ints plugins save them
+     * as; the game's types are numbered from their identifiers
+     */
     private static int $nextDynamicId = self::FIRST_UNUSED_BLOCK_ID;
 
     /** an id for a block type a plugin adds */

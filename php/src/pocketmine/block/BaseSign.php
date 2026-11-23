@@ -13,7 +13,7 @@ class BaseSign extends Block{
     /**
      * @param array<string, bool|int|string> $states
      */
-    public function __construct(string $identifier, array $states = [], string $fallbackName = ""){
+    public function __construct(BlockIdentifier|string $identifier, array|string $states = [], string|BlockTypeInfo $fallbackName = ""){
         parent::__construct($identifier, $states, $fallbackName);
         $this->text = new SignText();
     }

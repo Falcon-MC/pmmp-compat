@@ -6,22 +6,51 @@ namespace pocketmine\item;
 
 /** A piece of armour, worn in one of the four armour slots */
 class Armor extends Durable{
+    private ?ArmorTypeInfo $armorInfo = null;
+
+    /**
+     * the game's identifier, or PocketMine-MP's form for a plugin's own armour: an id, a name and its type
+     * @param string[] $enchantmentTags
+     */
+    public function __construct(ItemIdentifier|string $identifier, string $name = "", ?ArmorTypeInfo $info = null, array $enchantmentTags = []){
+        parent::__construct($identifier, $name, $enchantmentTags);
+        $this->armorInfo = $info;
+    }
+
+    public function getArmorTypeInfo() : ?ArmorTypeInfo{
+        return $this->armorInfo;
+    }
+
+    public function getMaterial() : ArmorMaterial{
+        return $this->armorInfo?->getMaterial() ?? VanillaArmorMaterials::LEATHER();
+    }
+
     public const TAG_CUSTOM_COLOR = "customColor";
 
     private function info() : array{
         return \pmmpcompat\ItemTypes::item($this->getFalconIdentifier()) ?? [];
     }
 
+    public function getMaxDurability() : int{
+        return $this->armorInfo?->getMaxDurability() ?? parent::getMaxDurability();
+    }
+
     public function getDefensePoints() : int{
+        if($this->armorInfo !== null){
+            return $this->armorInfo->getDefensePoints();
+        }
         return (int) ($this->info()["armorPoints"] ?? 0);
     }
 
     public function getToughness() : int{
-        return (int) ($this->info()["armorToughness"] ?? 0);
+        return $this->armorInfo?->getToughness() ?? (int) ($this->info()["armorToughness"] ?? 0);
     }
 
     /** one of ArmorInventory's SLOT_ numbers */
     public function getArmorSlot() : int{
+        if($this->armorInfo !== null){
+            return $this->armorInfo->getArmorSlot();
+        }
         return max(0, (int) ($this->info()["armorSlot"] ?? 1) - 1);
     }
 
@@ -30,7 +59,7 @@ class Armor extends Durable{
     }
 
     public function isFireProof() : bool{
-        return str_contains($this->getFalconIdentifier(), "netherite");
+        return $this->armorInfo?->isFireProof() ?? str_contains($this->getFalconIdentifier(), "netherite");
     }
 
     public function getCustomColor() : ?\pocketmine\color\Color{

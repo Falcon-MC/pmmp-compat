@@ -32,6 +32,11 @@ class RuntimeBlockStateRegistry{
         return Block::fromFalcon($state[0], $state[1]);
     }
 
+    /** PocketMine-MP's lookup tables of block properties; Falcon keeps its own */
+    public function fillStaticArrays(int $index, Block $block) : void{
+        //NOOP
+    }
+
     public function hasStateId(int $stateId) : bool{
         return isset($this->registered[$stateId]) || Block::stateOf($stateId) !== null;
     }

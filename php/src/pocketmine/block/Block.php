@@ -74,7 +74,9 @@ class Block{
         }
         $info = \pmmpcompat\ItemTypes::block($identifier);
         return self::$classes[$identifier] = match(true){
-            str_ends_with($identifier, "_sign") || $identifier === "minecraft:standing_sign" || $identifier === "minecraft:wall_sign" => BaseSign::class,
+            str_ends_with($identifier, "wall_sign") => WallSign::class,
+            str_ends_with($identifier, "_sign") => FloorSign::class,
+            $identifier === "minecraft:mob_spawner" => MonsterSpawner::class,
             $identifier === "minecraft:air" || str_ends_with($identifier, "_air") => Air::class,
             $identifier === "minecraft:water" || $identifier === "minecraft:flowing_water" => Water::class,
             $identifier === "minecraft:lava" || $identifier === "minecraft:flowing_lava" => Lava::class,

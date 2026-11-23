@@ -72,6 +72,7 @@ final class ItemTypes{
             $info = self::item($identifier);
             if($info !== null){
                 $class = match(true){
+                    $identifier === "minecraft:water_bucket" || $identifier === "minecraft:lava_bucket" => items\LiquidBucket::class,
                     str_ends_with($identifier, "_bucket") => items\Bucket::class,
                     $info["armorSlot"] > 0 => items\Armor::class,
                     $info["toolType"] === 1 => items\Sword::class,

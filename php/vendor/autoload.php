@@ -22,6 +22,9 @@ foreach([
     'RESOURCE_PATH' => dirname(__DIR__) . '/resources/',
     'COMPOSER_AUTOLOADER_PATH' => __FILE__,
     'LOCALE_DATA_PATH' => dirname(__DIR__) . '/resources/locale/',
+    'BEDROCK_ITEM_UPGRADE_SCHEMA_PATH' => dirname(__DIR__) . '/resources/bedrock-item-upgrade-schema/',
+    'BEDROCK_BLOCK_UPGRADE_SCHEMA_PATH' => dirname(__DIR__) . '/resources/bedrock-block-upgrade-schema/',
+    'BEDROCK_DATA_PATH' => dirname(__DIR__) . '/resources/bedrock-data/',
 ] as $name => $path){
     if(!defined('pocketmine\\' . $name)){
         define('pocketmine\\' . $name, $path);

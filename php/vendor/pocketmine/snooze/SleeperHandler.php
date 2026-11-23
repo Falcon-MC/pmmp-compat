@@ -45,11 +45,20 @@ class SleeperHandler{
 	 * @param \Closure $handler Called when the notifier wakes the server up, of the signature `function() : void`
 	 * @phpstan-param \Closure() : void $handler
 	 */
-	public function addNotifier(\Closure $handler) : SleeperHandlerEntry{
+	public function addNotifier(\Closure|SleeperNotifier $handler, ?\Closure $legacyHandler = null) : ?SleeperHandlerEntry{
+		if($handler instanceof SleeperNotifier){
+			if($legacyHandler === null){
+				throw new \ArgumentCountError("A legacy notifier requires a callback");
+			}
+			$id = $this->nextSleeperId++;
+			$handler->attachSleeper($this->sharedObject, $id);
+			$this->handlers[$id] = $legacyHandler;
+			return null;
+		}
+
 		$id = $this->nextSleeperId++;
-		$notifier = new SleeperHandlerEntry($this->sharedObject, $id);
 		$this->handlers[$id] = $handler;
-		return $notifier;
+		return new SleeperHandlerEntry($this->sharedObject, $id);
 	}
 
 	/**
@@ -58,7 +67,10 @@ class SleeperHandler{
 	 *
 	 * @see SleeperHandlerEntry::getNotifierId()
 	 */
-	public function removeNotifier(int $notifierId) : void{
+	public function removeNotifier(int|SleeperNotifier $notifierId) : void{
+		if($notifierId instanceof SleeperNotifier){
+			$notifierId = $notifierId->getSleeperId();
+		}
 		unset($this->handlers[$notifierId]);
 	}
 
@@ -117,7 +129,12 @@ class SleeperHandler{
 					//a previously-removed notifier might still be sending notifications; ignore them
 					continue;
 				}
-				$this->handlers[$notifierId]();
+				//keep dispatching other notifications when a plugin callback throws
+				try{
+					$this->handlers[$notifierId]();
+				}catch(\Throwable $e){
+					\GlobalLogger::get()->logException($e);
+				}
 			}
 		}
 	}

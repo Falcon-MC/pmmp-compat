@@ -30,6 +30,8 @@ final class VanillaItems{
         "glistering_melon" => "glistering_melon_slice",
         "melon" => "melon_slice",
         "scute" => "turtle_scute",
+        "slimeball" => "slime_ball",
+        "bottle_o_enchanting" => "experience_bottle",
     ];
 
     /** @var Item[] by identifier */
@@ -62,9 +64,25 @@ final class VanillaItems{
     /**
      * @param mixed[] $arguments
      */
+    /**
+     * members plugins put in place of the game's, by upper-case name: PocketMine-MP keeps its registry here, and
+     * plugins that replace one of its members through reflection write to it
+     * @var Item[]
+     */
+    private static array $members = [];
+
+    /** @return Item[] the members plugins set, by upper-case name */
+    public static function getAll() : array{
+        return array_map(static fn(Item $member) => clone $member, self::$members);
+    }
+
     public static function __callStatic(string $name, array $arguments) : Item{
         if(count($arguments) > 0){
             throw new \ArgumentCountError("Expected exactly 0 arguments, " . count($arguments) . " passed");
+        }
+        $upper = mb_strtoupper($name);
+        if(isset(self::$members[$upper])){
+            return clone self::$members[$upper];
         }
         $path = strtolower($name);
         $item = self::fromIdentifier(self::ALIASES[$path] ?? $path);

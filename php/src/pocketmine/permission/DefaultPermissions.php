@@ -155,6 +155,19 @@ abstract class DefaultPermissions{
 				$groups[$match[1]][] = $name;
 			}
 		}
+		//and the names PocketMine-MP 4 gave a few of them
+		foreach([
+			"pocketmine.command.banip" => ["pocketmine.command.ban.ip"],
+			"pocketmine.command.banlist" => ["pocketmine.command.ban.list"],
+			"pocketmine.command.pardon" => ["pocketmine.command.unban.player"],
+			"pocketmine.command.pardonip" => ["pocketmine.command.unban.ip"],
+			"pocketmine.command.deop" => ["pocketmine.command.op.take"],
+			"pocketmine.command.saveall" => ["pocketmine.command.save.perform"],
+			"pocketmine.command.saveon" => ["pocketmine.command.save.enable"],
+			"pocketmine.command.saveoff" => ["pocketmine.command.save.disable"],
+		] as $group => $children){
+			$groups[$group] = array_filter($children, fn(string $child) => $manager->getPermission($child) !== null);
+		}
 		foreach($groups as $group => $children){
 			if($manager->getPermission($group) === null){
 				$manager->addPermission(new Permission($group, "", array_fill_keys($children, true)));

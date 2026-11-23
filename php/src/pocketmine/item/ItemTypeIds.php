@@ -338,8 +338,12 @@ final class ItemTypeIds{
     public const BAMBOO_HANGING_SIGN = 2621297471;
     public const BAMBOO_SIGN = 1542325743;
 
-    public const FIRST_UNUSED_ITEM_ID = 17179869184;
+    public const FIRST_UNUSED_ITEM_ID = 2145386496;
 
+    /**
+     * the ids given to plugins' types count up from just under 2^31: they fit in the 32-bit ints plugins save them
+     * as; the game's types are numbered from their identifiers
+     */
     private static int $nextDynamicId = self::FIRST_UNUSED_ITEM_ID;
 
     /** an id for a item type a plugin adds */

@@ -41,3 +41,15 @@ archive SHA-256 `c9896660c2d8ca56eb66de2ac2805e68aef39431e901b015511d212b052d3d2
 `941f1cf2ccbecdc1c221dbfae9213439d334be5d490a2f3da2be31e8a00b0cdb`) into PHP. On Windows the PHP is
 [PocketMine-MP's own build](https://github.com/pmmp/PHP-Binaries) 8.3.29, with the official build's embed library and
 headers.
+
+`php/resources/bedrock-item-upgrade-schema/item_legacy_id_map.json` is
+[pmmp/BedrockItemUpgradeSchema](https://github.com/pmmp/BedrockItemUpgradeSchema) 1.17.0's map of the game's old
+numeric item ids (CC0-1.0, its license beside it).
+
+The bundled Snooze also supports the 0.4.0 notifier registration and removal signatures for older plugins.
+Notification callback exceptions are logged so callbacks for other notifiers still run.
+
+`php/resources/bedrock-block-upgrade-schema/block_legacy_id_map.json` is
+[pmmp/BedrockBlockUpgradeSchema](https://github.com/pmmp/BedrockBlockUpgradeSchema)'s map of the old numeric block ids,
+and `php/resources/bedrock-data/entity_id_map.json` [pmmp/BedrockData](https://github.com/pmmp/BedrockData)'s of the old
+numeric entity ids, the versions PocketMine-MP 5.44.3 uses (CC0-1.0, their licenses beside them).

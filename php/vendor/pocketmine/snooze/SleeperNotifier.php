@@ -14,31 +14,47 @@ declare(strict_types=1);
 
 namespace pocketmine\snooze;
 
+use pmmp\thread\ThreadSafe;
 use pmmp\thread\ThreadSafeArray;
 
 /**
  * Used to wake up the sleeping thread from another thread.
  * Use {@link SleeperHandlerEntry::createNotifier()} inside the thread to create this.
  */
-final class SleeperNotifier{
+class SleeperNotifier extends ThreadSafe{
+
+	private ?ThreadSafeArray $sharedObject = null;
+	private ?int $notifierId = null;
 
 	/**
 	 * @internal
-	 * Do not construct this object directly. Use {@link SleeperHandlerEntry::createNotifier()} instead.
+	 * Use {@link SleeperHandlerEntry::createNotifier()} for the current API.
 	 *
 	 * @phpstan-param ThreadSafeArray<int, int> $sharedObject
 	 */
 	public function __construct(
-		private readonly ThreadSafeArray $sharedObject,
-		private readonly int $notifierId
-	){}
+		?ThreadSafeArray $sharedObject = null,
+		?int $notifierId = null
+	){
+		$this->sharedObject = $sharedObject;
+		$this->notifierId = $notifierId;
+	}
+
+	final public function attachSleeper(ThreadSafeArray $sharedObject, int $id) : void{
+		$this->sharedObject = $sharedObject;
+		$this->notifierId = $id;
+	}
+
+	final public function getSleeperId() : int{
+		return $this->notifierId ?? throw new \LogicException("Notifier is not attached");
+	}
 
 	/**
 	 * Call this method to wake up the sleeping thread.
 	 */
 	final public function wakeupSleeper() : void{
 		$shared = $this->sharedObject;
-		$sleeperId = $this->notifierId;
+		$sleeperId = $this->getSleeperId();
 		$shared->synchronized(function() use ($shared, $sleeperId) : void{
 			if(!isset($shared[$sleeperId])){
 				$shared[$sleeperId] = $sleeperId;

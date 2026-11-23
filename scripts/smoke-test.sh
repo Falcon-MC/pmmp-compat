@@ -194,10 +194,11 @@ expect 'fixture: Keeper zip reads {"format_version": 2}, leveldb reads terrain, 
 expect "fixture: Keeper promise resolved with gold"
 expect "fixture: Keeper thread woke the server"
 expect "fixture: Keeper thread squared the sum: 100"
+expect "fixture: Keeper legacy notifier squared the sum: 9"
 expect "fixture: Keeper worker wrote sqlite, total 142"
 
 # what plugins build with: item and block types, saved items, enums, generators and the server's network
-expect "fixture: Builder 18 of 18 checks passed"
+expect "fixture: Builder 24 of 24 checks passed"
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

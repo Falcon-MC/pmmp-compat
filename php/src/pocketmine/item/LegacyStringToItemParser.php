@@ -9,7 +9,7 @@ use pocketmine\utils\SingletonTrait;
 /**
  * Items written as PocketMine-MP 3's strings, "diamond_sword" or "diamond_sword:5", with the damage after the colon.
  *
- * The numeric ids of those days ("276:0") name no item any more: they are refused, as an unknown name is.
+ * The numeric ids of those days ("276:0") are read through the game's old id map.
  */
 final class LegacyStringToItemParser{
     use SingletonTrait;
@@ -38,6 +38,10 @@ final class LegacyStringToItemParser{
                 throw new LegacyStringToItemParserException("Unable to parse \"" . $parts[1] . "\" from \"" . $input . "\" as a valid meta value");
             }
             $meta = (int) $parts[1];
+        }
+        if(is_numeric($name)){
+            $legacy = $this->map[$name] ?? $name;
+            $name = \pocketmine\data\bedrock\item\upgrade\LegacyItemIdToStringIdMap::getInstance()->legacyToString((int) $legacy) ?? $name;
         }
         $item = is_numeric($name) ? null : StringToItemParser::getInstance()->parse($name);
         if($item === null){

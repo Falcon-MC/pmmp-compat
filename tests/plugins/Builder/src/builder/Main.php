@@ -115,6 +115,38 @@ final class Main extends PluginBase{
             $parsed = yaml_parse("null: unknown\ntrue: yes");
             return $parsed[""] === "unknown" && $parsed[1] === "yes";
         });
+        $this->check("legacy numeric ids", fn() => LegacyStringToItemParser::getInstance()->parse("276:2")->equals(VanillaItems::DIAMOND_SWORD(), false));
+        $this->check("registry members", function() : bool{
+            $reflection = new \ReflectionClass(VanillaItems::class);
+            $members = $reflection->getStaticPropertyValue("members");
+            $members["APPLE"] = VanillaItems::GOLDEN_APPLE();
+            $reflection->setStaticPropertyValue("members", $members);
+            $replaced = VanillaItems::APPLE()->equals(VanillaItems::GOLDEN_APPLE());
+            $reflection->setStaticPropertyValue("members", []);
+            return $replaced && !VanillaItems::APPLE()->equals(VanillaItems::GOLDEN_APPLE());
+        });
+        $this->check("old permission names", fn() => \pocketmine\permission\PermissionManager::getInstance()->getPermission("pocketmine.command.pardon") !== null);
+        $this->check("zipped resource pack", function() : bool{
+            $path = $this->getDataFolder() . "pack.zip";
+            @mkdir($this->getDataFolder());
+            $zip = new \ZipArchive();
+            $zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+            $zip->addFromString("manifest.json", json_encode([
+                "format_version" => 2,
+                "header" => ["name" => "Sounds", "description" => "", "uuid" => "e4e7c4b3-2c39-4d2c-8a61-6a7b9b4d1c11", "version" => [1, 0, 0]],
+                "modules" => [["type" => "resources", "uuid" => "a1b2c3d4-2c39-4d2c-8a61-6a7b9b4d1c12", "version" => [1, 0, 0]]],
+            ]));
+            $zip->close();
+            $pack = new \pocketmine\resourcepacks\ZippedResourcePack($path);
+            return $pack->getPackName() === "Sounds" && $pack->getPackVersion() === "1.0.0";
+        });
+        $this->check("wood and armour types", fn() => \pocketmine\block\utils\WoodType::OAK instanceof \UnitEnum && class_exists(\pocketmine\item\ArmorTypeInfo::class));
+        $this->check("custom armour properties", function() : bool{
+            $info = new \pocketmine\item\ArmorTypeInfo(4, 123, 1, 3, true);
+            $armor = new \pocketmine\item\Armor(new \pocketmine\item\ItemIdentifier(\pocketmine\item\ItemTypeIds::newId()), "Builder Armour", $info);
+            return $armor->getDefensePoints() === 4 && $armor->getMaxDurability() === 123 && $armor->getArmorSlot() === 1
+                && $armor->getToughness() === 3 && $armor->isFireProof();
+        });
         $this->getLogger()->info("fixture: Builder {$this->passed} of {$this->total} checks passed");
     }
 }

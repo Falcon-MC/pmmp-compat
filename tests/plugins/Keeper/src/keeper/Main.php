@@ -8,6 +8,7 @@ use pmmp\thread\ThreadSafeArray;
 use pocketmine\plugin\PluginBase;
 use pocketmine\promise\PromiseResolver;
 use pocketmine\scheduler\ClosureTask;
+use pocketmine\snooze\SleeperNotifier;
 
 // databases, threads, the server's sleeper and promises
 final class Main extends PluginBase{
@@ -88,6 +89,19 @@ final class Main extends PluginBase{
         });
         $thread = new SumThread($numbers, $entry);
         $thread->start();
+
+        $sleeper = $this->getServer()->getTickSleeper();
+        $legacyNotifier = new SleeperNotifier();
+        $legacyThread = null;
+        $sleeper->addNotifier($legacyNotifier, function() use (&$legacyThread, $legacyNotifier, $sleeper, $logger) : void{
+            $legacyThread->join();
+            $sleeper->removeNotifier($legacyNotifier);
+            $logger->info("fixture: Keeper legacy notifier squared the sum: " . $legacyThread->sum);
+        });
+        $legacyNumbers = new ThreadSafeArray();
+        $legacyNumbers[] = 3;
+        $legacyThread = new SumThread($legacyNumbers, $legacyNotifier);
+        $legacyThread->start();
 
         $this->getServer()->getAsyncPool()->submitTask(new SqliteTask($path));
     }

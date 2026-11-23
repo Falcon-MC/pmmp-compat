@@ -6,8 +6,19 @@ namespace pocketmine\item;
 
 /** A tool of a material: wood, stone, iron, gold, diamond, netherite */
 abstract class TieredTool extends Tool{
+    private ?ToolTier $tier = null;
+
+    /**
+     * the game's identifier, or PocketMine-MP's form for a plugin's own tool: an id, a name and its tier
+     * @param string[] $enchantmentTags
+     */
+    public function __construct(ItemIdentifier|string $identifier, string $name = "", ?ToolTier $tier = null, array $enchantmentTags = []){
+        parent::__construct($identifier, $name, $enchantmentTags);
+        $this->tier = $tier;
+    }
+
     public function getTier() : ToolTier{
-        return \pmmpcompat\ItemTypes::tier((int) (\pmmpcompat\ItemTypes::item($this->getFalconIdentifier())["toolTier"] ?? 0)) ?? ToolTier::WOOD;
+        return $this->tier ?? \pmmpcompat\ItemTypes::tier((int) (\pmmpcompat\ItemTypes::item($this->getFalconIdentifier())["toolTier"] ?? 0)) ?? ToolTier::WOOD;
     }
 
     public function getBlockToolHarvestLevel() : int{
