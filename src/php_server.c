@@ -190,6 +190,73 @@ PHP_FUNCTION(falcon_level_biome) {
     RETURN_STRING(biome != NULL ? biome : "");
 }
 
+PHP_FUNCTION(falcon_event_resource_packs) {
+    zend_long handle;
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_LONG(handle)
+    ZEND_PARSE_PARAMETERS_END();
+    array_init(return_value);
+#ifdef FALCON_API_RESOURCE_PACK_OFFER
+    if (!FALCON_HAS(eventResourcePackCount) || !FALCON_HAS(eventResourcePackAt))
+        return;
+    FalconEvent *event = HANDLE(FalconEvent, handle);
+    const uint32_t count = falcon->eventResourcePackCount(event);
+    for (uint32_t i = 0; i < count; ++i) {
+        FalconOfferedResourcePack pack;
+        if (!falcon->eventResourcePackAt(event, i, &pack))
+            continue;
+        zval entry;
+        array_init(&entry);
+        add_next_index_string(&entry, pack.id);
+        add_next_index_string(&entry, pack.name);
+        add_next_index_string(&entry, pack.version);
+        add_next_index_string(&entry, pack.contentKey);
+        add_next_index_stringl(&entry, pack.sha256, 32);
+        add_next_index_long(&entry, (zend_long) pack.size);
+        add_next_index_stringl(&entry, pack.data, pack.dataSize);
+        add_next_index_zval(return_value, &entry);
+    }
+#endif
+}
+
+PHP_FUNCTION(falcon_event_replace_resource_pack_offer) {
+    zend_long handle;
+    HashTable *entries;
+    bool required;
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_LONG(handle)
+        Z_PARAM_ARRAY_HT(entries)
+        Z_PARAM_BOOL(required)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_RESOURCE_PACK_OFFER
+    enum { MAX_PACKS = 128, MAX_BYTES = 128 * 1024 * 1024 };
+    const uint32_t count = zend_hash_num_elements(entries);
+    if (!FALCON_HAS(eventReplaceResourcePackOffer) || count > MAX_PACKS)
+        RETURN_FALSE;
+    FalconResourcePackOfferEntry packs[MAX_PACKS];
+    uint32_t index = 0;
+    zval *entry;
+    ZEND_HASH_FOREACH_VAL(entries, entry) {
+        if (Z_TYPE_P(entry) != IS_ARRAY)
+            RETURN_FALSE;
+        const zval *id = zend_hash_index_find(Z_ARRVAL_P(entry), 0);
+        const zval *key = zend_hash_index_find(Z_ARRVAL_P(entry), 1);
+        const zval *data = zend_hash_index_find(Z_ARRVAL_P(entry), 2);
+        if (id == NULL || Z_TYPE_P(id) != IS_STRING || strlen(Z_STRVAL_P(id)) != Z_STRLEN_P(id) ||
+            key == NULL || Z_TYPE_P(key) != IS_STRING || strlen(Z_STRVAL_P(key)) != Z_STRLEN_P(key) ||
+            (data != NULL && (Z_TYPE_P(data) != IS_STRING || Z_STRLEN_P(data) > MAX_BYTES)))
+            RETURN_FALSE;
+        packs[index++] = (FalconResourcePackOfferEntry) {
+            Z_STRVAL_P(id),
+            {data != NULL ? Z_STRVAL_P(data) : NULL, data != NULL ? (uint32_t) Z_STRLEN_P(data) : 0, Z_STRVAL_P(key)}
+        };
+    } ZEND_HASH_FOREACH_END();
+    RETURN_BOOL(falcon->eventReplaceResourcePackOffer(HANDLE(FalconEvent, handle), packs, count, required ? 1 : 0));
+#else
+    RETURN_FALSE;
+#endif
+}
+
 PHP_FUNCTION(falcon_server_replace_resource_packs) {
     HashTable *entries;
     bool required;
@@ -461,6 +528,8 @@ const zend_function_entry falcon_server_functions[] = {
     ENTRY(falcon_level_game_rule)
     ENTRY(falcon_level_set_game_rule)
     ENTRY(falcon_level_biome)
+    ENTRY(falcon_event_resource_packs)
+    ENTRY(falcon_event_replace_resource_pack_offer)
     ENTRY(falcon_server_replace_resource_packs)
     ENTRY(falcon_item_info)
     ENTRY(falcon_register_custom_item)

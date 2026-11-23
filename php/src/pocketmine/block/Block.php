@@ -88,6 +88,8 @@ class Block{
             $identifier === "minecraft:lava" || $identifier === "minecraft:flowing_lava" => Lava::class,
             $identifier === "minecraft:chest" || $identifier === "minecraft:trapped_chest" => Chest::class,
             $identifier === "minecraft:hopper" => Hopper::class,
+            $identifier === "minecraft:campfire" || $identifier === "minecraft:soul_campfire" => Campfire::class,
+            $identifier === "minecraft:farmland" => Farmland::class,
             $identifier === "minecraft:snow_layer" => SnowLayer::class,
             str_ends_with($identifier, "_leaves") => Leaves::class,
             $info === null => Block::class,
@@ -202,6 +204,11 @@ class Block{
      */
     public function getStates() : array{
         return $this->states;
+    }
+
+    protected function setState(string $name, bool|int|string $value) : void{
+        $this->states[$name] = $value;
+        ksort($this->states);
     }
 
     public function getName() : string{

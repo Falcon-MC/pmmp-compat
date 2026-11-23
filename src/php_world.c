@@ -174,6 +174,23 @@ PHP_FUNCTION(falcon_level_spawn) {
     return_vector(return_value, falcon->levelSpawnPosition(HANDLE(FalconLevel, level)));
 }
 
+PHP_FUNCTION(falcon_level_set_spawn) {
+    zend_long level, x, y, z;
+    ZEND_PARSE_PARAMETERS_START(4, 4)
+        Z_PARAM_LONG(level)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(z)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_WORLD_SPAWN_POSITION
+    RETURN_BOOL(x >= INT32_MIN && x <= INT32_MAX && y >= INT32_MIN && y <= INT32_MAX
+        && z >= INT32_MIN && z <= INT32_MAX && FALCON_HAS(levelSetSpawnPosition)
+        && falcon->levelSetSpawnPosition(HANDLE(FalconLevel, level), BLOCK_POS(x, y, z)) != 0);
+#else
+    RETURN_FALSE;
+#endif
+}
+
 PHP_FUNCTION(falcon_level_entities) {
     ARGUMENTS_1(level);
     FalconLevel *target = HANDLE(FalconLevel, level);
@@ -812,6 +829,7 @@ const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_level_time)
     ENTRY(falcon_level_set_time)
     ENTRY(falcon_level_spawn)
+    ENTRY(falcon_level_set_spawn)
     ENTRY(falcon_level_entities)
     ENTRY(falcon_level_is_chunk_loaded)
     ENTRY(falcon_level_highest_block)

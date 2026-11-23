@@ -25,6 +25,7 @@ use pocketmine\entity\Zombie;
 final class Entities{
     /** the PocketMine-MP class of each Falcon entity type that has one */
     private const CLASSES = [
+        "minecraft:area_effect_cloud" => \pocketmine\entity\object\AreaEffectCloud::class,
         "minecraft:item" => objects\ItemEntity::class,
         "minecraft:xp_orb" => objects\ExperienceOrb::class,
         "minecraft:falling_block" => objects\FallingBlock::class,

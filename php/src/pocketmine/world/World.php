@@ -14,6 +14,10 @@ use pocketmine\block\tile\TileFactory;
 use pocketmine\math\AxisAlignedBB;
 use pocketmine\block\VanillaBlocks;
 use pocketmine\entity\Entity;
+use pocketmine\event\world\ChunkPopulateEvent;
+use pocketmine\event\world\WorldDisplayNameChangeEvent;
+use pocketmine\event\world\WorldParticleEvent;
+use pocketmine\event\world\WorldSoundEvent;
 use pocketmine\item\Item;
 use pocketmine\math\Vector3;
 use pocketmine\player\Player;
@@ -102,7 +106,23 @@ class World implements ChunkManager{
     }
 
     public function getDisplayName() : string{
-        return $this->folderName;
+        return $this->getServer()->getWorldManager()->displayNameOf($this->folderName);
+    }
+
+    public function setDisplayName(string $name) : void{
+        (new WorldDisplayNameChangeEvent($this, $this->getDisplayName(), $name))->call();
+        $this->getServer()->getWorldManager()->storeDisplayName($this->folderName, $name);
+    }
+
+    public function getDifficulty() : int{
+        return falcon_server_difficulty();
+    }
+
+    public function setDifficulty(int $difficulty) : void{
+        if($difficulty < 0 || $difficulty > 3){
+            throw new \InvalidArgumentException("Invalid difficulty level $difficulty");
+        }
+        falcon_server_set_difficulty($difficulty);
     }
 
     public function getMinY() : int{
@@ -206,6 +226,7 @@ class World implements ChunkManager{
         $this->chunkListeners[self::chunkHash($chunkX, $chunkZ)][spl_object_id($listener)] = $listener;
         \pmmpcompat\Bridge::listenFor(\pocketmine\event\world\ChunkLoadEvent::class);
         \pmmpcompat\Bridge::listenFor(\pocketmine\event\world\ChunkUnloadEvent::class);
+        \pmmpcompat\Bridge::listenFor(ChunkPopulateEvent::class);
     }
 
     public function unregisterChunkListener(ChunkListener $listener, int $chunkX, int $chunkZ) : void{
@@ -229,6 +250,13 @@ class World implements ChunkManager{
             }else{
                 $listener->onChunkUnloaded($chunkX, $chunkZ, $chunk);
             }
+        }
+    }
+
+    /** @internal */
+    public function notifyChunkPopulated(int $chunkX, int $chunkZ, Chunk $chunk) : void{
+        foreach($this->chunkListeners[self::chunkHash($chunkX, $chunkZ)] ?? [] as $listener){
+            $listener->onChunkPopulated($chunkX, $chunkZ, $chunk);
         }
     }
 
@@ -474,6 +502,12 @@ class World implements ChunkManager{
         return new Position($x, $y, $z, $this);
     }
 
+    public function setSpawnLocation(Vector3 $pos) : void{
+        if(!falcon_level_set_spawn($this->level, $pos->getFloorX(), $pos->getFloorY(), $pos->getFloorZ())){
+            throw new \InvalidArgumentException("Could not set spawn to $pos");
+        }
+    }
+
     public function getTime() : int{
         return falcon_level_time($this->level);
     }
@@ -580,8 +614,19 @@ class World implements ChunkManager{
      * @param Player[]|null $players everyone near when null
      */
     public function addSound(Vector3 $pos, Sound $sound, ?array $players = null) : void{
+        $viewers = $this->getViewersForPosition($pos);
+        $players ??= $viewers;
+        if(WorldSoundEvent::hasHandlers()){
+            $event = new WorldSoundEvent($this, $sound, $pos, $players);
+            $event->call();
+            if($event->isCancelled()){
+                return;
+            }
+            $sound = $event->getSound();
+            $players = $event->getRecipients();
+        }
+        $players = array_uintersect($players, $viewers, static fn(Player $left, Player $right) => $left->getId() <=> $right->getId());
         $packets = $sound->encode($pos);
-        $players ??= $this->getViewersForPosition($pos);
         if(count($packets) > 0 && count($players) > 0){
             NetworkBroadcastUtils::broadcastPackets($players, $packets);
         }
@@ -591,8 +636,19 @@ class World implements ChunkManager{
      * @param Player[]|null $players everyone near when null
      */
     public function addParticle(Vector3 $pos, Particle $particle, ?array $players = null) : void{
+        $viewers = $this->getViewersForPosition($pos);
+        $players ??= $viewers;
+        if(WorldParticleEvent::hasHandlers()){
+            $event = new WorldParticleEvent($this, $particle, $pos, $players);
+            $event->call();
+            if($event->isCancelled()){
+                return;
+            }
+            $particle = $event->getParticle();
+            $players = $event->getRecipients();
+        }
+        $players = array_uintersect($players, $viewers, static fn(Player $left, Player $right) => $left->getId() <=> $right->getId());
         $packets = $particle->encode($pos);
-        $players ??= $this->getViewersForPosition($pos);
         if(count($packets) > 0 && count($players) > 0){
             NetworkBroadcastUtils::broadcastPackets($players, $packets);
         }

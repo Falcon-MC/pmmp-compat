@@ -11,6 +11,7 @@ use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\network\mcpe\protocol\ContainerClosePacket;
 use pocketmine\network\mcpe\protocol\ContainerOpenPacket;
 use pocketmine\player\Player;
+use pocketmine\player\PlayerInfo;
 
 /**
  * A player's connection, as plugins reach it for packets: Player::getNetworkSession().
@@ -18,55 +19,78 @@ use pocketmine\player\Player;
  * Packets go out through Falcon, which writes their header and batches them; see Packets for the game version.
  */
 class NetworkSession{
-    private InventoryManager $invManager;
+    private ?InventoryManager $invManager = null;
 
     public function __construct(
-        private Player $player
+        private ?Player $player = null,
+        private int $connectingHandle = 0,
+        private ?PlayerInfo $playerInfo = null,
+        private int $remotePort = 0,
     ){
+        if($player !== null){
+            $this->invManager = new InventoryManager($player);
+        }
+    }
+
+    /** @internal */
+    public function attachPlayer(Player $player) : void{
+        $this->player = $player;
         $this->invManager = new InventoryManager($player);
+        $this->connectingHandle = 0;
+        $this->playerInfo = null;
+    }
+
+    /** @internal */
+    public function getFalconHandle() : int{
+        return $this->player?->getHandle() ?? $this->connectingHandle;
+    }
+
+    /** @internal */
+    public function finishConnection() : void{
+        $this->connectingHandle = 0;
+    }
+
+    public function getPlayerInfo() : ?PlayerInfo{
+        return $this->player?->getPlayerInfo() ?? $this->playerInfo;
     }
 
     public function getInvManager() : ?InventoryManager{
-        return $this->player->isOnline() ? $this->invManager : null;
+        return $this->player?->isOnline() ? $this->invManager : null;
     }
 
     public function getPlayer() : ?Player{
-        return $this->player->isOnline() ? $this->player : null;
+        return $this->player?->isOnline() ? $this->player : null;
     }
 
     public function isConnected() : bool{
-        return $this->player->isOnline();
+        return $this->player?->isOnline() ?? ($this->connectingHandle !== 0);
     }
 
     public function getPing() : int{
-        return $this->player->getPing() ?? 0;
+        return $this->player?->getPing() ?? 0;
     }
 
     public function getDisplayName() : string{
-        return $this->player->getName();
+        return $this->player?->getName() ?? $this->playerInfo?->getUsername() ?? "";
     }
 
     /** the address without its port */
     public function getIp() : string{
-        $address = $this->player->isOnline() ? falcon_player_address($this->player->getHandle()) : "";
-        $colon = strrpos($address, ":");
-        return $colon === false ? $address : trim(substr($address, 0, $colon), "[]");
+        return $this->isConnected() ? falcon_player_address($this->getFalconHandle()) : "";
     }
 
     public function getPort() : int{
-        $address = $this->player->isOnline() ? falcon_player_address($this->player->getHandle()) : "";
-        $colon = strrpos($address, ":");
-        return $colon === false ? 0 : (int) substr($address, $colon + 1);
+        return $this->remotePort;
     }
 
     /** the protocol the client speaks, which may be newer than BedrockProtocol's */
     public function getProtocolId() : int{
-        return $this->player->isOnline() ? falcon_player_protocol($this->player->getHandle()) : 0;
+        return $this->isConnected() ? falcon_player_protocol($this->getFalconHandle()) : 0;
     }
 
     /** @param bool $immediate kept for PocketMine-MP's signature: Falcon decides when it flushes */
     public function sendDataPacket(ClientboundPacket $packet, bool $immediate = false) : bool{
-        if(!$this->player->isOnline()){
+        if(!$this->player?->isOnline()){
             return false;
         }
         if(!DataPacketSendEvent::hasHandlers()){
@@ -86,7 +110,7 @@ class NetworkSession{
 
     /** @internal a packet DataPacketSendEvent already saw */
     public function sendWithoutEvent(ClientboundPacket $packet) : bool{
-        if(!$this->player->isOnline()){
+        if(!$this->player?->isOnline()){
             return false;
         }
         [$id, $payload] = Packets::encode($this->withWindowId($packet));
@@ -117,7 +141,7 @@ class NetworkSession{
      * PocketMine-MP's own AvailableCommandsPacket
      */
     public function syncAvailableCommands() : void{
-        if($this->player->isOnline()){
+        if($this->player?->isOnline()){
             falcon_player_send_commands($this->player->getHandle());
         }
     }

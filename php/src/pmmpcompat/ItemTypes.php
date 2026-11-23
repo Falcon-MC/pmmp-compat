@@ -24,6 +24,8 @@ final class ItemTypes{
     /** the items PocketMine-MP has a class of its own for, by identifier */
     private const CLASSES = [
         "minecraft:bow" => items\Bow::class,
+        "minecraft:writable_book" => items\WritableBook::class,
+        "minecraft:written_book" => items\WrittenBook::class,
         "minecraft:crossbow" => items\Bow::class,
         "minecraft:potion" => items\Potion::class,
         "minecraft:splash_potion" => items\SplashPotion::class,

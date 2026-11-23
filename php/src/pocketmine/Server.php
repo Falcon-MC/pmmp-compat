@@ -47,6 +47,9 @@ class Server{
     private WorldManager $worldManager;
     private ?CraftingManager $craftingManager = null;
     private int $tickCounter = 0;
+    private ?\pocketmine\network\query\QueryInfo $queryInfo = null;
+    private ?\pocketmine\updater\UpdateChecker $updater = null;
+    private ?MemoryManager $memoryManager = null;
 
     public static function getInstance() : Server{
         if(self::$instance === null){
@@ -102,9 +105,27 @@ class Server{
         $this->asyncPool->collectTasks();
         $this->resourcePackManager?->publish();
         $this->logger->flush();
+        $this->getMemoryManager()->check();
+        if($this->tickCounter % 20 === 0){
+            $query = new \pocketmine\event\server\QueryRegenerateEvent(new \pocketmine\network\query\QueryInfo($this));
+            $query->call();
+            $this->queryInfo = $query->getQueryInfo();
+        }
         if($this->tickCounter % 1200 === 0){
             \pmmpcompat\Entities::forgetClosed();
         }
+    }
+
+    public function getQueryInformation() : \pocketmine\network\query\QueryInfo{
+        return $this->queryInfo ??= new \pocketmine\network\query\QueryInfo($this);
+    }
+
+    public function getUpdater() : \pocketmine\updater\UpdateChecker{
+        return $this->updater ??= new \pocketmine\updater\UpdateChecker($this);
+    }
+
+    public function getMemoryManager() : MemoryManager{
+        return $this->memoryManager ??= new MemoryManager($this->getConfigGroup());
     }
 
     public function getTick() : int{

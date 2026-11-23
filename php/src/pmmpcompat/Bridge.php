@@ -45,6 +45,7 @@ use pocketmine\entity\Location;
 use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\block\BlockPlaceEvent;
 use pocketmine\event\block\SignChangeEvent;
+use pocketmine\event\entity\EntityDamageByBlockEvent;
 use pocketmine\event\entity\EntityDamageByEntityEvent;
 use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\entity\EntityDeathEvent;
@@ -123,7 +124,7 @@ final class Bridge{
         self::BLOCK_BREAK => [BlockBreakEvent::class],
         self::BLOCK_PLACE => [BlockPlaceEvent::class],
         self::PLAYER_INTERACT_BLOCK => [PlayerInteractEvent::class],
-        self::ENTITY_DAMAGE => [EntityDamageEvent::class, EntityDamageByEntityEvent::class],
+        self::ENTITY_DAMAGE => [EntityDamageEvent::class, EntityDamageByEntityEvent::class, EntityDamageByBlockEvent::class],
         self::ENTITY_DEATH => [EntityDeathEvent::class],
         self::PLAYER_DEATH => [PlayerDeathEvent::class],
         self::PLAYER_RESPAWN => [PlayerRespawnEvent::class],
@@ -160,7 +161,7 @@ final class Bridge{
      * now on, a listener for a parent class such as PlayerEvent taking all of its children's
      */
     public static function listenFor(string $eventClass) : void{
-        foreach(self::SOURCES + WorldEvents::SOURCES as $type => $classes){
+        foreach(self::SOURCES + WorldEvents::SOURCES + PlayerCompatibilityEvents::SOURCES + WorldCompatibilityEvents::SOURCES as $type => $classes){
             foreach($classes as $class){
                 if(is_a($class, $eventClass, true)){
                     self::listenTo($type);
@@ -222,6 +223,12 @@ final class Bridge{
 
     public static function event(int $type, int $priority, int $handle) : void{
         try{
+            if($type === PlayerCompatibilityEvents::PLAYER_CREATION){
+                if($priority === EventPriority::LOWEST){
+                    Players::get(falcon_event_player($handle), (int) falcon_event_amount($handle));
+                }
+                return;
+            }
             if($priority === EventPriority::LOWEST){
                 $event = self::create($type, $handle);
                 if($event === null){
@@ -284,7 +291,8 @@ final class Bridge{
                 return self::state(new CommandEvent($sender, $message), $message, $handle);
             case self::PLAYER_PRE_LOGIN:
                 // Falcon's last word before the player is let in, as PocketMine-MP's login event
-                return self::state(new PlayerLoginEvent(Players::get(falcon_event_player($handle)), $message), $message, $handle);
+                $player = Players::get(falcon_event_player($handle), (int) falcon_event_amount($handle));
+                return self::state(new PlayerLoginEvent($player, $message), $message, $handle);
             case self::PLAYER_GAME_MODE_CHANGE:
                 $gameMode = self::gameMode(falcon_event_game_mode($handle));
                 if($gameMode === null){
@@ -309,7 +317,8 @@ final class Bridge{
     /** the events that carry blocks, items and entities */
     private static function createWorldEvent(int $type, int $handle, string $message) : ?array{
         $playerHandle = falcon_event_player($handle);
-        $player = $playerHandle !== 0 ? Players::get($playerHandle) : null;
+        $player = $playerHandle !== 0 && $type !== PlayerCompatibilityEvents::PLAYER_DUPLICATE_LOGIN
+            && $type !== PlayerCompatibilityEvents::PLAYER_RESOURCE_PACK_OFFER ? Players::get($playerHandle) : null;
         switch($type){
             case self::PLAYER_MOVE:
                 if($player === null){
@@ -347,6 +356,10 @@ final class Bridge{
                     ? new EntityDamageByEntityEvent(Entities::get($attackerHandle), $entity, $cause, $amount, [],
                         $knockback[0] ?? Living::DEFAULT_KNOCKBACK_FORCE, $knockback[1] ?? Living::DEFAULT_KNOCKBACK_VERTICAL_LIMIT)
                     : new EntityDamageEvent($entity, $cause, $amount);
+                if($attackerHandle === 0 && ($world = self::eventWorld($handle)) !== null){
+                    [$x, $y, $z] = falcon_event_block($handle);
+                    $event = new EntityDamageByBlockEvent($world->getBlockAt($x, $y, $z), $entity, $cause, $amount);
+                }
                 if($entity->isDrawnByPlugin()){
                     // PHP hurts it, as on PocketMine-MP: its attack() decides, Falcon's stand-in takes nothing
                     $refused = falcon_event_is_cancelled($handle);
@@ -486,7 +499,11 @@ final class Bridge{
                 $text = new SignText(explode("\n", $message));
                 return self::state(new SignChangeEvent($sign, $player, $text, falcon_event_state($handle)), $message, $handle);
         }
-        $created = WorldEvents::create($type, $handle, $player);
+        $created = match(true){
+            isset(PlayerCompatibilityEvents::SOURCES[$type]) => PlayerCompatibilityEvents::create($type, $handle, $player),
+            isset(WorldCompatibilityEvents::SOURCES[$type]) => WorldCompatibilityEvents::create($type, $handle, $player),
+            default => WorldEvents::create($type, $handle, $player),
+        };
         return $created === null ? null : self::state($created['event'], $message, $handle) + $created;
     }
 
@@ -670,6 +687,14 @@ final class Bridge{
         $event = $state['event'];
         if($event instanceof Cancellable){
             falcon_event_set_cancelled($handle, $event->isCancelled());
+        }
+        if(isset(PlayerCompatibilityEvents::SOURCES[$type])){
+            PlayerCompatibilityEvents::apply($handle, $state, $last);
+            return;
+        }
+        if(isset(WorldCompatibilityEvents::SOURCES[$type])){
+            WorldCompatibilityEvents::apply($handle, $state, $last);
+            return;
         }
         if(isset(WorldEvents::SOURCES[$type])){
             WorldEvents::apply($handle, $state, $last);

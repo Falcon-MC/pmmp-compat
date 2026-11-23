@@ -273,6 +273,16 @@ PHP_FUNCTION(falcon_event_set_message) {
     falcon->eventSetMessage(HANDLE(FalconEvent, event), ZSTR_VAL(message));
 }
 
+PHP_FUNCTION(falcon_event_data) {
+    HANDLE_ARGUMENT(event);
+    return_text(return_value, falcon->eventData(HANDLE(FalconEvent, event)));
+}
+
+PHP_FUNCTION(falcon_event_set_data) {
+    HANDLE_TEXT_ARGUMENTS(event, data);
+    falcon->eventSetData(HANDLE(FalconEvent, event), ZSTR_VAL(data));
+}
+
 PHP_FUNCTION(falcon_event_cause) {
     HANDLE_ARGUMENT(event);
     return_text(return_value, falcon->eventCause(HANDLE(FalconEvent, event)));
@@ -546,6 +556,8 @@ static const zend_function_entry falcon_functions[] = {
     ZEND_RAW_FENTRY("falcon_event_player", ZEND_FN(falcon_event_player), arginfo_handle_long, 0)
     ZEND_RAW_FENTRY("falcon_event_message", ZEND_FN(falcon_event_message), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_event_set_message", ZEND_FN(falcon_event_set_message), arginfo_handle_text_void, 0)
+    ZEND_RAW_FENTRY("falcon_event_data", ZEND_FN(falcon_event_data), arginfo_handle_string, 0)
+    ZEND_RAW_FENTRY("falcon_event_set_data", ZEND_FN(falcon_event_set_data), arginfo_handle_text_void, 0)
     ZEND_RAW_FENTRY("falcon_event_cause", ZEND_FN(falcon_event_cause), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_event_is_cancelled", ZEND_FN(falcon_event_is_cancelled), arginfo_handle_bool, 0)
     ZEND_RAW_FENTRY("falcon_event_set_cancelled", ZEND_FN(falcon_event_set_cancelled), arginfo_handle_flag_void, 0)

@@ -15,6 +15,30 @@ class WorldManager{
 
     /** @var World[] by Falcon level handle */
     private array $byLevel = [];
+    private ?\pocketmine\utils\Config $displayNames = null;
+
+    /** @internal */
+    public function displayNameOf(string $folderName) : string{
+        return (string) ($this->displayNames(false)?->get($folderName, $folderName) ?? $folderName);
+    }
+
+    /** @internal */
+    public function storeDisplayName(string $folderName, string $name) : void{
+        $config = $this->displayNames(true);
+        $config->set($folderName, $name);
+        $config->save();
+    }
+
+    private function displayNames(bool $create) : ?\pocketmine\utils\Config{
+        $path = dirname(rtrim(\pocketmine\Server::getInstance()->getPluginPath(), "/\\")) . DIRECTORY_SEPARATOR;
+        if($this->displayNames === null){
+            $file = $path . "world-display-names.json";
+            if($create || is_file($file)){
+                $this->displayNames = new \pocketmine\utils\Config($file, \pocketmine\utils\Config::JSON);
+            }
+        }
+        return $this->displayNames;
+    }
 
     /** @internal what Falcon has now, kept for the worlds already seen */
     private function refresh() : void{

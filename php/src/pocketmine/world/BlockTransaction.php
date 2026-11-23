@@ -80,19 +80,25 @@ class BlockTransaction{
 		return $this->blocks[$x][$y][$z] ?? $this->world->getBlockAt($x, $y, $z);
 	}
 
-	/**
-	 * Validates and attempts to apply the transaction to the given world. If any part of the transaction fails to
-	 * validate, no changes will be made to the world.
-	 *
-	 * @return bool if the application was successful
-	 */
-	public function apply() : bool{
+	/** @internal Checks plugin validators before Falcon applies the transaction. */
+	public function validate() : bool{
 		foreach($this->getBlocks() as [$x, $y, $z, $_]){
 			foreach($this->validators as $validator){
 				if(!$validator($this->world, $x, $y, $z)){
 					return false;
 				}
 			}
+		}
+		return true;
+	}
+
+	/**
+	 * Validates and attempts to apply the transaction to the given world. If any part of the transaction fails to
+	 * validate, no changes will be made to the world.
+	 */
+	public function apply() : bool{
+		if(!$this->validate()){
+			return false;
 		}
 		$changedBlocks = 0;
 		foreach($this->getBlocks() as [$x, $y, $z, $block]){

@@ -19,6 +19,7 @@ use pocketmine\inventory\PlayerCursorInventory;
 use pocketmine\inventory\PlayerEnderInventory;
 use pocketmine\inventory\PlayerInventory;
 use pocketmine\inventory\PlayerOffHandInventory;
+use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\SetActorDataPacket;
 use pocketmine\network\mcpe\protocol\SetTitlePacket;
@@ -76,14 +77,21 @@ class Player extends Human implements CommandSender, IPlayer{
     private PlayerCursorInventory $cursorInventory;
     private ?Inventory $currentWindow = null;
     private NetworkSession $networkSession;
+    private int $handle;
     /** @var Form[] by Falcon's form id */
     private array $forms = [];
 
     /** @internal the runtime makes one for each of Falcon's players */
     public function __construct(
         Server $server,
-        private int $handle
+        int|NetworkSession $connection,
+        ?PlayerInfo $playerInfo = null,
+        bool $authenticated = false,
+        ?Location $location = null,
+        ?CompoundTag $offlinePlayerData = null,
     ){
+        $handle = $connection instanceof NetworkSession ? $connection->getFalconHandle() : $connection;
+        $this->handle = $handle;
         parent::__construct(falcon_entity_runtime_id(falcon_player_entity($handle)));
         $this->server = $server;
         $this->inventory = new PlayerInventory($this);
@@ -91,19 +99,30 @@ class Player extends Human implements CommandSender, IPlayer{
         $this->offHandInventory = new PlayerOffHandInventory($this);
         $this->enderInventory = new PlayerEnderInventory($this);
         $this->cursorInventory = new PlayerCursorInventory($this);
-        $this->networkSession = new NetworkSession($this);
-        $this->username = falcon_player_name($handle);
+        $this->networkSession = $connection instanceof NetworkSession ? $connection : new NetworkSession($this);
+        $this->username = $playerInfo?->getUsername() ?? falcon_player_name($handle);
         $this->displayName = $this->username;
         $this->playerNameTag = $this->username;
         $uuid = falcon_player_uuid($handle);
         $this->uuid = Uuid::isValid($uuid) ? Uuid::fromString($uuid) : Uuid::uuid3(Uuid::NIL, $this->username);
         $this->xuid = falcon_player_xuid($handle);
+        if($connection instanceof NetworkSession){
+            $connection->attachPlayer($this);
+        }
         $this->perm = new PermissibleBase([DefaultPermissions::ROOT_USER => true]);
         $this->syncOperator();
         // as in PocketMine-MP: a change of permissions sends the commands again
         $this->getPermissionRecalculationCallbacks()->add(function(array $changed) : void{
             $this->networkSession->syncAvailableCommands();
         });
+    }
+
+    /** @internal */
+    public function onSessionCreated(NetworkSession $session) : void{
+        if($this->networkSession !== $session){
+            $this->networkSession = $session;
+            $session->attachPlayer($this);
+        }
     }
 
     /** @internal the player left: nothing reaches Falcon's player from now on */
