@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe;
 
+use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\player\Player;
 
@@ -13,6 +14,8 @@ final class NetworkBroadcastUtils{
     }
 
     /**
+     * as in PocketMine-MP, one DataPacketSendEvent sees the packets for all the recipients first
+     *
      * @param Player[]            $recipients
      * @param ClientboundPacket[] $packets
      */
@@ -20,13 +23,28 @@ final class NetworkBroadcastUtils{
         if(count($packets) === 0){
             throw new \InvalidArgumentException("Cannot broadcast empty list of packets");
         }
-        $sent = false;
+        $sessions = [];
         foreach($recipients as $player){
-            if(!$player->isConnected()){
-                continue;
+            if($player->isConnected()){
+                $sessions[] = $player->getNetworkSession();
             }
+        }
+        if(count($sessions) === 0){
+            return false;
+        }
+        if(DataPacketSendEvent::hasHandlers()){
+            $event = new DataPacketSendEvent($sessions, $packets);
+            $event->call();
+            if($event->isCancelled()){
+                return false;
+            }
+            $sessions = $event->getTargets();
+            $packets = $event->getPackets();
+        }
+        $sent = false;
+        foreach($sessions as $session){
             foreach($packets as $packet){
-                $sent = $player->getNetworkSession()->sendDataPacket($packet) || $sent;
+                $sent = $session->sendWithoutEvent($packet) || $sent;
             }
         }
         return $sent;

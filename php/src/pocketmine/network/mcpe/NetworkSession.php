@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace pocketmine\network\mcpe;
 
 use pmmpcompat\Packets;
+use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\protocol\ClientboundCloseFormPacket;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\player\Player;
@@ -62,6 +63,26 @@ class NetworkSession{
         if(!$this->player->isOnline()){
             return false;
         }
+        if(!DataPacketSendEvent::hasHandlers()){
+            return $this->sendWithoutEvent($packet);
+        }
+        $event = new DataPacketSendEvent([$this], [$packet]);
+        $event->call();
+        if($event->isCancelled()){
+            return false;
+        }
+        $sent = false;
+        foreach($event->getPackets() as $sending){
+            $sent = $this->sendWithoutEvent($sending) || $sent;
+        }
+        return $sent;
+    }
+
+    /** @internal a packet DataPacketSendEvent already saw */
+    public function sendWithoutEvent(ClientboundPacket $packet) : bool{
+        if(!$this->player->isOnline()){
+            return false;
+        }
         [$id, $payload] = Packets::encode($packet);
         return falcon_player_send_packet($this->player->getHandle(), $id, $payload);
     }
@@ -72,6 +93,16 @@ class NetworkSession{
 
     public function getTypeConverter() : \pocketmine\network\mcpe\convert\TypeConverter{
         return \pocketmine\network\mcpe\convert\TypeConverter::getInstance();
+    }
+
+    /**
+     * the commands the player may run, sent again: Falcon builds the list, and DataPacketSendEvent sees it go out as
+     * PocketMine-MP's own AvailableCommandsPacket
+     */
+    public function syncAvailableCommands() : void{
+        if($this->player->isOnline()){
+            falcon_player_send_commands($this->player->getHandle());
+        }
     }
 
     /** @internal */

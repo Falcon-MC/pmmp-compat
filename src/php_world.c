@@ -522,6 +522,12 @@ PHP_FUNCTION(falcon_player_send_packet) {
                                          (const uint8_t *) ZSTR_VAL(payload), (uint32_t) ZSTR_LEN(payload)) != 0);
 }
 
+// the player's commands built anew and sent again, DATA_PACKET_SEND firing for them; false on a Falcon without it
+PHP_FUNCTION(falcon_player_send_commands) {
+    ARGUMENTS_1(player);
+    RETURN_BOOL(FALCON_HAS(playerSendCommands) && falcon->playerSendCommands(HANDLE(FalconPlayer, player)) != 0);
+}
+
 // [packet id, payload without its header]
 PHP_FUNCTION(falcon_event_packet) {
     ARGUMENTS_1(event);
@@ -841,6 +847,7 @@ const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_event_position)
     ENTRY(falcon_event_item)
     ENTRY(falcon_player_send_packet)
+    ENTRY(falcon_player_send_commands)
     ENTRY(falcon_event_packet)
     ENTRY(falcon_event_set_packet)
     ENTRY(falcon_player_send_form)

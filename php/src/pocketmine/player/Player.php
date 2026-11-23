@@ -76,6 +76,10 @@ class Player extends Human implements CommandSender, IPlayer{
         $this->xuid = falcon_player_xuid($handle);
         $this->perm = new PermissibleBase([DefaultPermissions::ROOT_USER => true]);
         $this->syncOperator();
+        // as in PocketMine-MP: a change of permissions sends the commands again
+        $this->getPermissionRecalculationCallbacks()->add(function(array $changed) : void{
+            $this->networkSession->syncAvailableCommands();
+        });
     }
 
     /** @internal the player left: nothing reaches Falcon's player from now on */

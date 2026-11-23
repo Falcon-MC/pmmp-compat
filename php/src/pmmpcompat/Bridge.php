@@ -138,9 +138,6 @@ final class Bridge{
     /** @var array<int, true> the Falcon events passed here so far */
     private static array $listening = [];
 
-    /** what a send listener asked to go out in place of a packet goes out without coming back here */
-    private static bool $resending = false;
-
     /** @var array<int, array{event: Event, message: string, recipients: object[], sender: ?object}> by handle */
     private static array $inFlight = [];
 
@@ -425,7 +422,7 @@ final class Bridge{
             case self::DATA_PACKET_SEND:
                 // decoded only for listeners: most packets pass with nobody looking
                 $receiving = $type === self::DATA_PACKET_RECEIVE;
-                if($player === null || self::$resending
+                if($player === null
                     || !($receiving ? DataPacketReceiveEvent::hasHandlers() : DataPacketSendEvent::hasHandlers())){
                     return null;
                 }
@@ -437,7 +434,7 @@ final class Bridge{
                 }
                 return $packet instanceof ClientboundPacket
                     ? self::state(new DataPacketSendEvent([$player->getNetworkSession()], [$packet]), $message, $handle)
-                        + ['packets' => [$packet]] : null;
+                        + ['packets' => [$packet], 'packetId' => $packetId, 'payload' => $payload] : null;
             case self::INVENTORY_OPEN:
                 if($player === null){
                     return null;
@@ -602,6 +599,22 @@ final class Bridge{
         };
     }
 
+    /**
+     * a listener changed the packet itself, as Commando-style hooks edit AvailableCommandsPacket: Falcon sends the
+     * changed one. A packet BedrockProtocol does not write back byte for byte is compared with a fresh read of the
+     * original, so only a real change replaces Falcon's
+     */
+    private static function applyPacketChange(int $handle, array $state) : void{
+        [, $payload] = Packets::encode($state['packets'][0]);
+        if($payload === $state['payload']){
+            return;
+        }
+        $original = Packets::decode($state['packetId'], $state['payload']);
+        if($original === null || Packets::encode($original)[1] !== $payload){
+            falcon_event_set_packet($handle, $payload);
+        }
+    }
+
     private static function callListeners(Event $event, int $priority) : void{
         foreach(HandlerListManager::global()->getHandlersFor($event::class) as $listener){
             if($listener->getPriority() !== $priority){
@@ -690,16 +703,13 @@ final class Bridge{
         }elseif($event instanceof DataPacketSendEvent && $last && !$event->isCancelled() && $event->getPackets() !== $state['packets']){
             // other packets in its place: they go out here, the one Falcon held does not
             falcon_event_set_cancelled($handle, true);
-            self::$resending = true;
-            try{
-                foreach($event->getTargets() as $target){
-                    foreach($event->getPackets() as $packet){
-                        $target->sendDataPacket($packet);
-                    }
+            foreach($event->getTargets() as $target){
+                foreach($event->getPackets() as $packet){
+                    $target->sendWithoutEvent($packet);
                 }
-            }finally{
-                self::$resending = false;
             }
+        }elseif($event instanceof DataPacketSendEvent && $last && !$event->isCancelled()){
+            self::applyPacketChange($handle, $state);
         }elseif($event instanceof InventoryOpenEvent && $last && !$event->isCancelled() && isset($state['inventory'])){
             $event->getPlayer()->onWindowOpenedByFalcon($state['inventory']);
         }elseif($event instanceof SignChangeEvent){

@@ -35,7 +35,8 @@ usual, and each class forwards to Falcon.
   - Falcon events go to PocketMine listeners, with priorities, cancellation and `@handleCancelled`.
 - **Commands**:
   - commands declared in `plugin.yml` or registered at run time;
-  - `onCommand`, permissions and aliases.
+  - `onCommand`, permissions and aliases;
+  - the parameters the client completes, as Commando and plugins that edit `AvailableCommandsPacket` set them.
 - **Scheduler**:
   - delayed and repeating tasks on the server thread;
   - async tasks on a pool of worker threads.

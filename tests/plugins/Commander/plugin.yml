@@ -1,0 +1,12 @@
+name: Commander
+version: 1.0.0
+main: commander\Main
+api: 5.0.0
+commands:
+  note:
+    description: Takes a note, described by its usage only
+    usage: /note <text>
+    permission: commander.command.note
+permissions:
+  commander.command.note:
+    default: true

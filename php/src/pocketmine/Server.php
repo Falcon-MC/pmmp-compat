@@ -14,6 +14,8 @@ use pocketmine\command\SimpleCommandMap;
 use pocketmine\console\ConsoleCommandSender;
 use pocketmine\lang\Language;
 use pocketmine\lang\Translatable;
+use pocketmine\network\mcpe\NetworkBroadcastUtils;
+use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\permission\DefaultPermissionNames;
 use pocketmine\player\Player;
 use pocketmine\plugin\PluginManager;
@@ -252,6 +254,15 @@ class Server{
             $recipient->sendMessage($message);
         }
         return count($recipients);
+    }
+
+    /**
+     * @deprecated as in PocketMine-MP: NetworkBroadcastUtils::broadcastPackets()
+     * @param Player[]            $players
+     * @param ClientboundPacket[] $packets
+     */
+    public function broadcastPackets(array $players, array $packets) : bool{
+        return NetworkBroadcastUtils::broadcastPackets($players, $packets);
     }
 
     /**

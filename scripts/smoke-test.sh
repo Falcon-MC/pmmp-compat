@@ -80,7 +80,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "16 PocketMine-MP plugins loaded, 9 could not be"
+expect "17 PocketMine-MP plugins loaded, 9 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"
@@ -156,6 +156,15 @@ expect "fixture: Courier registered its npc as courier:npc"
 expect "fixture: Courier packet round trips, protocol 1.26.60, pool ready"
 expect "fixture: Courier sees Visitor with uuid set and protocol known"
 expect "fixture: Courier sent a form and a packet: sent"
+
+# the parameters a client is shown for plugin commands: Falcon's list as a Commando hook and an editing plugin change it
+expect "fixture: Commander registered shop and its alias in Falcon"
+expect "fixture: Commander decoded the captured command list: hidden, note, ping, shop"
+expect "fixture: Commander shop (shop, store): <buy: buy> <item: apple|bread> [amount: int] / <sell: sell> <item: soft ShopItems> / [player: target]"
+expect "fixture: Commander note: [args: text]"
+expect "fixture: Commander ping: <host: string> [count: int x]"
+expect "fixture: Commander hidden gone, soft enums ShopItems: apple, bread, cake"
+expect "fixture: Commander saw 1 list go out"
 
 # enchantments, the inventories a player wears and keeps, and a menu window as InvMenu opens one
 expect "fixture: Shopkeeper sword keeps sharpness 3, parser agrees"

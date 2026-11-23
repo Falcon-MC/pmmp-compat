@@ -2,6 +2,7 @@
 
 #include <falcon/Falcon.hpp>
 
+#include <cstddef>
 #include <cstdlib>
 #include <optional>
 #include <filesystem>
@@ -128,4 +129,8 @@ private:
     bool mStarted = false;
 };
 
-FALCON_PLUGIN(PmmpCompat)
+extern "C" FALCON_EXPORT int falcon_plugin_entry(const FalconServerApi *api, FalconPlugin *plugin,
+                                                 FalconPluginCallbacks *callbacks) {
+    // newer API fields are optional in the bridge; this is the table through the drop and knockback functions
+    return falcon::detail::entry<PmmpCompat>(api, plugin, callbacks, offsetof(FalconServerApi, entitySetPluginDrawn));
+}
