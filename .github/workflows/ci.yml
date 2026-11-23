@@ -111,7 +111,7 @@ jobs:
 
       - name: Cache the Falcon server
         id: falcon
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: falcon-bin
           key: falcon-windows-x64-${{ env.FALCON_REVISION }}
@@ -142,6 +142,13 @@ jobs:
           cmake --build falcon-build --target FalconServer --parallel 4
           mkdir -p falcon-bin
           cp falcon-build/Falcon.Server/FalconServer.exe falcon-bin/
+
+      - name: Save the Falcon server build
+        if: steps.falcon.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: falcon-bin
+          key: ${{ steps.falcon.outputs.cache-primary-key }}
 
       - name: Smoke test in Falcon
         shell: bash

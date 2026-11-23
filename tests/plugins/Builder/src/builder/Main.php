@@ -112,7 +112,7 @@ final class Main extends PluginBase{
                 && $this->getServer()->getCommandMap()->getCommand("nonsense") === null;
         });
         $this->check("yaml keys", function() : bool{
-            $parsed = yaml_parse("null: unknown\ntrue: yes");
+            $parsed = yaml_parse("null: unknown\ntrue: 'yes'");
             return $parsed[""] === "unknown" && $parsed[1] === "yes";
         });
         $this->check("legacy numeric ids", fn() => LegacyStringToItemParser::getInstance()->parse("276:2")->equals(VanillaItems::DIAMOND_SWORD(), false));

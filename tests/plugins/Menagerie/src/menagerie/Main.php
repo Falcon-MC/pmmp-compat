@@ -22,6 +22,8 @@ use pocketmine\world\World;
 
 // entities a plugin defines: they spawn, tick, move, take hits and despawn
 final class Main extends PluginBase implements Listener{
+    private const SPAWN_Y = 300.0;
+
     private int $passed = 0;
     private int $total = 0;
     private int $spawnEvents = 0;
@@ -71,7 +73,8 @@ final class Main extends PluginBase implements Listener{
     }
 
     private function spawn(World $world) : void{
-        $dummy = new Dummy(new Location(8.5, 120.0, 8.5, $world, 90.0, 0.0));
+        // Keep the damage and movement checks clear of randomly generated terrain.
+        $dummy = new Dummy(new Location(8.5, self::SPAWN_Y, 8.5, $world, 90.0, 0.0));
         $dummy->setNameTag("Bob");
         $dummy->spawnToAll();
         $id = $dummy->getId();
@@ -82,7 +85,7 @@ final class Main extends PluginBase implements Listener{
         $this->check("scale", $dummy->getScale() === 2.0 && abs($dummy->getSize()->getHeight() - 3.9) < 0.001);
         $this->check("health", $dummy->getHealth() === 20.0 && $dummy->getMaxHealth() === 20 && $dummy->isAlive());
 
-        $puppet = new Puppet(new Location(10.5, 120.0, 8.5, $world, 0.0, 0.0), new Skin("Standard_Custom", str_repeat("\xff", 64 * 64 * 4)));
+        $puppet = new Puppet(new Location(10.5, self::SPAWN_Y, 8.5, $world, 0.0, 0.0), new Skin("Standard_Custom", str_repeat("\xff", 64 * 64 * 4)));
         $puppet->setNameTag("Alice");
         $puppet->setNameTagAlwaysVisible();
         $puppet->spawnToAll();
@@ -102,14 +105,15 @@ final class Main extends PluginBase implements Listener{
         $this->getLogger()->info("fixture: Menagerie Dummy ticked " . ($dummy->ticks >= 15 ? "on its own" : "only " . $dummy->ticks . " times"));
         // the copy closed before its first tick: only the first fired it
         $this->check("spawn event", $this->spawnEvents === 1);
-        $this->check("no gravity", abs($dummy->getPosition()->y - 120.0) < 0.001);
+        $this->check("no gravity", abs($dummy->getPosition()->y - self::SPAWN_Y) < 0.001);
 
-        $dummy->teleport(new Vector3(12.5, 120.0, 12.5));
+        $dummy->teleport(new Vector3(12.5, self::SPAWN_Y, 12.5));
         $position = $dummy->getPosition();
         $this->check("teleport", abs($position->x - 12.5) < 0.001 && abs($position->z - 12.5) < 0.001);
 
         $dummy->attack(new EntityDamageEvent($dummy, EntityDamageEvent::CAUSE_MAGIC, 5));
-        $this->check("hurt by a plugin", $dummy->getHealth() === 15.0 && $this->damageEvents === 1
+        $this->check("hurt by a plugin (health {$dummy->getHealth()}, {$this->damageEvents} damage events, causes "
+            . implode(", ", $dummy->hits) . ")", $dummy->getHealth() === 15.0 && $this->damageEvents === 1
             && $dummy->hits === [EntityDamageEvent::CAUSE_MAGIC]);
 
         $dummy->setMotion(new Vector3(0.5, 0.0, 0.0));
@@ -117,7 +121,8 @@ final class Main extends PluginBase implements Listener{
             $position = $dummy->getPosition();
             $this->check("moved by its motion", $position->x > 13.0);
             // Falcon's stand-in followed: the world's own queries find the entity where PHP moved it
-            $near = $world->getNearbyEntities(new AxisAlignedBB($position->x - 1, 119, $position->z - 1, $position->x + 1, 122, $position->z + 1));
+            $near = $world->getNearbyEntities(new AxisAlignedBB($position->x - 1, self::SPAWN_Y - 1, $position->z - 1,
+                $position->x + 1, self::SPAWN_Y + 2, $position->z + 1));
             $this->check("stand-in followed", in_array($dummy, $near, true));
             $dummy->setMotion(Vector3::zero());
             // an explosion of Falcon's hurts the stand-in: the hit reaches attack()

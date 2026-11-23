@@ -14,6 +14,10 @@ cat > "$work/permission-groups.json" <<'JSON'
 {"default":"fixture","groups":{"fixture":{"inherits":[],"permissions":{"fixture.group":true,"fixture.denied":false}}},"players":{}}
 JSON
 echo "Logs are in $work"
-"${PYTHON:-python3}" "$root/scripts/run-test-server.py" "$1" "$work" "$work/captured.log"
+python="${PYTHON:-python3}"
+if [[ -z "${PYTHON:-}" ]] && ! "$python" -c "" 2>/dev/null; then
+    python=python
+fi
+"$python" "$root/scripts/run-test-server.py" "$1" "$work" "$work/captured.log"
 grep -F '[FormsPlayerPermissions] player compatibility online passed' "$work/captured.log"
 grep -F '[FormsPlayerPermissions] player compatibility offline passed' "$work/captured.log"
