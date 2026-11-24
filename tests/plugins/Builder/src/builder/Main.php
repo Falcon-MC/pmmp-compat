@@ -85,8 +85,9 @@ final class Main extends PluginBase{
                 && GlobalBlockStateHandlers::getDeserializer()->deserialize($data) === $stone->getStateId();
         });
         $this->check("legacy Fortune registration", function() : bool{
-            $parser = StringToEnchantmentParser::getInstance();
-            $map = EnchantmentIdMap::getInstance();
+            $parser = clone StringToEnchantmentParser::getInstance();
+            $originalMap = EnchantmentIdMap::getInstance();
+            $map = clone $originalMap;
             $default = VanillaEnchantments::FORTUNE();
             if($parser->parse("fortune") !== $default){
                 return false;
@@ -94,13 +95,16 @@ final class Main extends PluginBase{
 
             $replacement = new Enchantment($default->getName(), $default->getRarity(), 0, 0, 3);
             $map->register(EnchantmentIds::FORTUNE, $replacement);
+            EnchantmentIdMap::setInstance($map);
             try{
                 $parser->register("minecraft:fortune", fn() => $replacement);
                 $pickaxe = VanillaItems::DIAMOND_PICKAXE()->addEnchantment(new EnchantmentInstance($replacement, 3));
                 $restored = Item::nbtDeserialize($pickaxe->nbtSerialize());
                 $duplicateRejected = false;
                 try{
-                    $parser->register("fortune", fn() => $replacement);
+                    $parser->register("fortune", static function() : never{
+                        throw new \RuntimeException("The duplicate alias was evaluated");
+                    });
                 }catch(\InvalidArgumentException){
                     $duplicateRejected = true;
                 }
@@ -108,8 +112,7 @@ final class Main extends PluginBase{
                 return $duplicateRejected && $parser->parse("fortune") === $replacement
                     && $restored->getEnchantmentLevel($replacement) === 3;
             }finally{
-                $map->register(EnchantmentIds::FORTUNE, $default);
-                $parser->override("fortune", fn() => $default);
+                EnchantmentIdMap::setInstance($originalMap);
             }
         });
         $this->check("legacy parser", function() : bool{

@@ -36,6 +36,8 @@ use pocketmine\utils\StringToTParser;
 final class StringToEnchantmentParser extends StringToTParser{
 	use SingletonTrait;
 
+	private bool $hasDefaultFortune = false;
+
 	private static function make() : self{
 		$result = new self();
 
@@ -46,6 +48,7 @@ final class StringToEnchantmentParser extends StringToTParser{
 		$result->register("fire_protection", fn() => VanillaEnchantments::FIRE_PROTECTION());
 		$result->register("flame", fn() => VanillaEnchantments::FLAME());
 		$result->register("fortune", fn() => VanillaEnchantments::FORTUNE());
+		$result->hasDefaultFortune = true;
 		$result->register("frost_walker", fn() => VanillaEnchantments::FROST_WALKER());
 		$result->register("infinity", fn() => VanillaEnchantments::INFINITY());
 		$result->register("knockback", fn() => VanillaEnchantments::KNOCKBACK());
@@ -68,7 +71,7 @@ final class StringToEnchantmentParser extends StringToTParser{
 
 	public function register(string $alias, \Closure $callback) : void{
 		// Older plugins register the Bedrock ID before claiming Fortune's built-in alias.
-		if($this->reprocess($alias) === "fortune" && $this->parse($alias) === VanillaEnchantments::FORTUNE()){
+		if($this->hasDefaultFortune && $this->reprocess($alias) === "fortune"){
 			$mapped = EnchantmentIdMap::getInstance()->fromId(EnchantmentIds::FORTUNE);
 			if($mapped !== null && $mapped !== VanillaEnchantments::FORTUNE() && $callback($alias) === $mapped){
 				$this->override($alias, $callback);
@@ -76,6 +79,13 @@ final class StringToEnchantmentParser extends StringToTParser{
 			}
 		}
 		parent::register($alias, $callback);
+	}
+
+	public function override(string $alias, \Closure $callback) : void{
+		parent::override($alias, $callback);
+		if($this->reprocess($alias) === "fortune"){
+			$this->hasDefaultFortune = false;
+		}
 	}
 
 	public function parse(string $input) : ?Enchantment{
