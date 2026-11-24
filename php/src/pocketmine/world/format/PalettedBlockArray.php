@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace pocketmine\world\format;
 
 use pocketmine\block\Block;
+use pocketmine\utils\BinaryStream;
 use pocketmine\world\World;
 
 /** A palette for a detached subchunk or a live view of one of Falcon's block layers. */
 final class PalettedBlockArray{
     /** @var array<int, int> */
     private array $blocks = [];
+    /** @var array<int, int>|null Original values at changed cells in a detached editing snapshot. */
+    private ?array $originalEntries = null;
     private ?World $world = null;
     /** @var array{int, int, int, int} */
     private array $origin;
@@ -47,6 +50,14 @@ final class PalettedBlockArray{
         $z &= 15;
         if($this->world === null){
             $index = ($x << 8) | ($z << 4) | $y;
+            if($this->originalEntries !== null){
+                $original = $this->originalEntries[$index] ?? $this->blocks[$index] ?? $this->fillEntry;
+                if($val === $original){
+                    unset($this->originalEntries[$index]);
+                }else{
+                    $this->originalEntries[$index] = $original;
+                }
+            }
             if($val === $this->fillEntry){
                 unset($this->blocks[$index]);
             }else{
@@ -95,5 +106,72 @@ final class PalettedBlockArray{
 
     public function collectGarbage(bool $force = false) : void{
         // Entries matching the fill value are removed on every write.
+    }
+
+    /** @internal Copies live data before it crosses into a worker. */
+    public function snapshot(bool $trackChanges = false) : self{
+        if($this->world === null){
+            $snapshot = clone $this;
+        }else{
+            $snapshot = new self($this->fillEntry);
+            for($index = 0; $index < 4096; ++$index){
+                $snapshot->set($index >> 8, $index, $index >> 4, $this->get($index >> 8, $index, $index >> 4));
+            }
+        }
+        if($trackChanges){
+            $snapshot->originalEntries ??= [];
+        }
+        return $snapshot;
+    }
+
+    /** @internal @return array<int, int> Original values keyed by XZY cell index. */
+    public function getOriginalEntries() : array{
+        return $this->originalEntries ?? throw new \InvalidArgumentException('Expected an editing snapshot');
+    }
+
+    /** @internal */
+    public function writeSnapshot(BinaryStream $stream) : void{
+        $snapshot = $this->world === null ? $this : $this->snapshot();
+        $stream->putLInt($snapshot->fillEntry);
+        $stream->putBool($snapshot->originalEntries !== null);
+        self::writeEntries($stream, $snapshot->blocks);
+        if($snapshot->originalEntries !== null){
+            self::writeEntries($stream, $snapshot->originalEntries);
+        }
+    }
+
+    /** @internal */
+    public static function readSnapshot(BinaryStream $stream) : self{
+        $snapshot = new self($stream->getLInt() & 0xffffffff);
+        $tracked = $stream->getBool();
+        $snapshot->blocks = self::readEntries($stream);
+        $snapshot->originalEntries = $tracked ? self::readEntries($stream) : null;
+        return $snapshot;
+    }
+
+    /** @param array<int, int> $entries */
+    private static function writeEntries(BinaryStream $stream, array $entries) : void{
+        $stream->putLShort(count($entries));
+        foreach($entries as $index => $state){
+            $stream->putLShort($index);
+            $stream->putLInt($state);
+        }
+    }
+
+    /** @return array<int, int> */
+    private static function readEntries(BinaryStream $stream) : array{
+        $count = $stream->getLShort();
+        if($count > 4096){
+            throw new \UnexpectedValueException('Too many cells in a palette snapshot');
+        }
+        $entries = [];
+        for($i = 0; $i < $count; ++$i){
+            $index = $stream->getLShort();
+            if($index >= 4096 || isset($entries[$index])){
+                throw new \UnexpectedValueException('Invalid palette cell index');
+            }
+            $entries[$index] = $stream->getLInt() & 0xffffffff;
+        }
+        return $entries;
     }
 }

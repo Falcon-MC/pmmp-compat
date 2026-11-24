@@ -19,6 +19,9 @@ class RuntimeBlockStateRegistry{
     /** @var Block[] by type id */
     private array $typeIndex = [];
 
+    /** @var array<int, float> Blast resistance overrides, indexed by block state ID. */
+    public array $blastResistance = [];
+
     public function register(Block $block) : void{
         $this->typeIndex[$block->getTypeId()] = clone $block;
         foreach($block->generateStatePermutations() as $state){
@@ -27,6 +30,9 @@ class RuntimeBlockStateRegistry{
     }
 
     public function fromStateId(int $stateId) : Block{
+        if($stateId < 0 && $stateId >= -0x80000000){
+            $stateId &= 0xffffffff;
+        }
         if(isset($this->registered[$stateId])){
             return clone $this->registered[$stateId];
         }
@@ -42,7 +48,16 @@ class RuntimeBlockStateRegistry{
     }
 
     public function hasStateId(int $stateId) : bool{
+        if($stateId < 0 && $stateId >= -0x80000000){
+            $stateId &= 0xffffffff;
+        }
         return isset($this->registered[$stateId]) || Block::stateOf($stateId) !== null;
+    }
+
+    /** @internal A translated state may travel in a signed 32-bit worker message. */
+    public function rememberTranslatedState(Block $block, int $stateId) : void{
+        $workerId = $stateId << 32 >> 32;
+        $this->typeIndex[$workerId] ??= $block;
     }
 
     /** @return Block[] the states known so far, by id */

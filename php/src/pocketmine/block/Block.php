@@ -16,6 +16,10 @@ use pocketmine\world\World;
  * getStateId() are numbers made from them, the same from one run to the next.
  */
 class Block{
+    /** This runtime uses opaque 32-bit state IDs with no reserved property bits. */
+    public const INTERNAL_STATE_DATA_BITS = 0;
+    public const EMPTY_STATE_ID = 2200582101; // crc32("minecraft:air{}")
+
     /** @var array<int, array{string, string}> the state ids given out, for the network ids plugins ask for */
     private static array $statesById = [];
     /** @var array<int, string> */
@@ -88,6 +92,7 @@ class Block{
             $identifier === "minecraft:lava" || $identifier === "minecraft:flowing_lava" => Lava::class,
             $identifier === "minecraft:chest" || $identifier === "minecraft:trapped_chest" => Chest::class,
             $identifier === "minecraft:hopper" => Hopper::class,
+            $identifier === "minecraft:bedrock" => Bedrock::class,
             $identifier === "minecraft:campfire" || $identifier === "minecraft:soul_campfire" => Campfire::class,
             $identifier === "minecraft:farmland" => Farmland::class,
             $identifier === "minecraft:snow_layer" => SnowLayer::class,
@@ -110,7 +115,9 @@ class Block{
         }
         $toolType = $info["toolType"] > 0 && $info["toolType"] <= 6 ? 1 << ($info["toolType"] - 1) : BlockToolType::NONE;
         $level = \pmmpcompat\ItemTypes::tier($info["toolTier"])?->getHarvestLevel() ?? 0;
-        return new BlockBreakInfo($info["hardness"], $toolType, $level, $info["blastResistance"]);
+        $resistance = RuntimeBlockStateRegistry::getInstance()->blastResistance;
+        $blastResistance = $resistance === [] ? $info["blastResistance"] : ($resistance[$this->getStateId()] ?? $info["blastResistance"]);
+        return new BlockBreakInfo($info["hardness"], $toolType, $level, $blastResistance);
     }
 
     public function getLightLevel() : int{
@@ -295,7 +302,10 @@ class Block{
      * @return array{string, string}|null
      */
     public static function stateOf(int $stateId) : ?array{
-        return self::$statesById[$stateId] ?? null;
+        if($stateId < 0 && $stateId >= -0x80000000){
+            $stateId &= 0xffffffff;
+        }
+        return self::$statesById[$stateId] ?? ($stateId === self::EMPTY_STATE_ID ? ["minecraft:air", "{}"] : null);
     }
 
     public function isSameType(Block $other) : bool{

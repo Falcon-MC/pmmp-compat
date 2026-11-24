@@ -99,6 +99,22 @@ php -d phar.readonly=0 scripts/patch-properduels.php ProperDuels_3.0.0.phar Prop
 Stop the server and replace the original PHAR in the plugins folder with the patched copy. Keep the
 existing `plugin_data/ProperDuels` directory so the plugin can reuse its database.
 
+### EasyEdit 3.1.0
+
+The Poggit release replaces PocketMine-MP's internal chunks when applying an edit. Use the patcher to
+write changed blocks to the live Falcon world and to let the editing worker start when conversion
+data are unavailable.
+
+```sh
+php -d phar.readonly=0 scripts/patch-easyedit.php EasyEdit_3.1.0.phar EasyEdit_3.1.0-patched.phar
+```
+
+Stop the server and replace the original archive in `plugins/pmmp-compat/plugins/` with the patched
+one. Keep any existing `plugin_data/EasyEdit/` directory. Coordinate selection, `//set` and `//undo`
+support ordinary blocks. Edits targeting block entities or blocks changed while
+the worker was running are rejected. External conversion data are required for the corresponding
+block tags.
+
 ## Building
 
 Requires CMake 3.16+, a C++20 compiler and the thread-safe PHP 8 embed library the scripts set up:

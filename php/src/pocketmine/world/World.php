@@ -57,6 +57,7 @@ class World implements ChunkManager{
 
     private int $id;
     private bool $loaded = true;
+    private bool $autoSave = true;
     /** @var array<int, array<int, ChunkListener>> */
     private array $chunkListeners = [];
     /** @var ReversePriorityQueue<int, Vector3> */
@@ -99,6 +100,15 @@ class World implements ChunkManager{
 
     public function isLoaded() : bool{
         return $this->loaded;
+    }
+
+    public function getAutoSave() : bool{
+        return $this->autoSave;
+    }
+
+    /** Controls whether plugins persist their world data on save and unload. Falcon manages its own storage. */
+    public function setAutoSave(bool $value) : void{
+        $this->autoSave = $value;
     }
 
     public function getFolderName() : string{
@@ -157,6 +167,11 @@ class World implements ChunkManager{
      * @param bool $update kept for PocketMine-MP's signature: Falcon updates the neighbours either way
      */
     public function setBlockAt(int $x, int $y, int $z, Block $block, bool $update = true) : void{
+        $this->writeBlockAt($x, $y, $z, $block);
+    }
+
+    /** @internal Reports whether Falcon accepted a block write. */
+    public function writeBlockAt(int $x, int $y, int $z, Block $block) : bool{
         if(!$this->isInWorld($x, $y, $z)){
             throw new \InvalidArgumentException("Pos x=$x,y=$y,z=$z is outside of the world bounds");
         }
@@ -169,6 +184,7 @@ class World implements ChunkManager{
                 $listener->onBlockChanged($pos);
             }
         }
+        return $changed;
     }
 
     public function setBlock(Vector3 $pos, Block $block, bool $update = true) : void{

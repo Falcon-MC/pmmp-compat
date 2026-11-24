@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace pocketmine\data\bedrock\block;
 
 use pocketmine\block\Block;
+use pocketmine\block\RuntimeBlockStateRegistry;
 use pocketmine\data\bedrock\block\convert\UnsupportedBlockStateException;
 
 /** The game's saved states to block state ids */
@@ -38,7 +39,10 @@ final class BlockStateDeserializer{
      * @throws BlockStateDeserializeException|UnsupportedBlockStateException
      */
     public function deserialize(BlockStateData $stateData) : int{
-        return $this->deserializeBlock($stateData)->getStateId();
+        $block = $this->deserializeBlock($stateData);
+        $stateId = $block->getStateId();
+        RuntimeBlockStateRegistry::getInstance()->rememberTranslatedState($block, $stateId);
+        return $stateId;
     }
 
     public function deserializeBlock(BlockStateData $stateData) : Block{

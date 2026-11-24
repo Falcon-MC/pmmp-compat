@@ -230,6 +230,10 @@ class Player extends Human implements CommandSender, IPlayer{
         return $this->online && falcon_player_has_chunk($this->handle, $chunkX, $chunkZ);
     }
 
+    public function isUsingChunk(int $chunkX, int $chunkZ) : bool{
+        return $this->hasReceivedChunk($chunkX, $chunkZ);
+    }
+
     public function getNetworkSession() : NetworkSession{
         return $this->networkSession;
     }
