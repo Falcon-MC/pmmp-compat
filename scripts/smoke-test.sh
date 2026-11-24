@@ -212,7 +212,7 @@ expect "fixture: Keeper legacy notifier squared the sum: 9"
 expect "fixture: Keeper worker wrote sqlite, total 142"
 
 # what plugins build with: item and block types, saved items, enums, generators and the server's network
-expect "fixture: Builder 24 of 24 checks passed"
+expect "fixture: Builder 25 of 25 checks passed"
 
 # a plugin stops before the one it depends on
 expect "fixture: Alpha disabled"

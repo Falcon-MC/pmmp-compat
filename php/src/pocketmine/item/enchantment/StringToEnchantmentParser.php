@@ -23,6 +23,8 @@ declare(strict_types=1);
 
 namespace pocketmine\item\enchantment;
 
+use pocketmine\data\bedrock\EnchantmentIdMap;
+use pocketmine\data\bedrock\EnchantmentIds;
 use pocketmine\utils\SingletonTrait;
 use pocketmine\utils\StringToTParser;
 
@@ -62,6 +64,18 @@ final class StringToEnchantmentParser extends StringToTParser{
 		$result->register("vanishing", fn() => VanillaEnchantments::VANISHING());
 
 		return $result;
+	}
+
+	public function register(string $alias, \Closure $callback) : void{
+		// Older plugins register the Bedrock ID before claiming Fortune's built-in alias.
+		if($this->reprocess($alias) === "fortune" && $this->parse($alias) === VanillaEnchantments::FORTUNE()){
+			$mapped = EnchantmentIdMap::getInstance()->fromId(EnchantmentIds::FORTUNE);
+			if($mapped !== null && $mapped !== VanillaEnchantments::FORTUNE() && $callback($alias) === $mapped){
+				$this->override($alias, $callback);
+				return;
+			}
+		}
+		parent::register($alias, $callback);
 	}
 
 	public function parse(string $input) : ?Enchantment{

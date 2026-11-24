@@ -13,7 +13,13 @@ use pocketmine\block\RuntimeBlockStateRegistry;
 use pocketmine\block\utils\DyeColor;
 use pocketmine\block\VanillaBlocks;
 use pocketmine\command\Command;
+use pocketmine\data\bedrock\EnchantmentIdMap;
+use pocketmine\data\bedrock\EnchantmentIds;
 use pocketmine\entity\Skin;
+use pocketmine\item\enchantment\Enchantment;
+use pocketmine\item\enchantment\EnchantmentInstance;
+use pocketmine\item\enchantment\StringToEnchantmentParser;
+use pocketmine\item\enchantment\VanillaEnchantments;
 use pocketmine\item\Item;
 use pocketmine\item\ItemIdentifier;
 use pocketmine\item\ItemTypeIds;
@@ -77,6 +83,34 @@ final class Main extends PluginBase{
             $data = GlobalBlockStateHandlers::getSerializer()->serialize($stone->getStateId());
             return $data->getName() === "minecraft:stone"
                 && GlobalBlockStateHandlers::getDeserializer()->deserialize($data) === $stone->getStateId();
+        });
+        $this->check("legacy Fortune registration", function() : bool{
+            $parser = StringToEnchantmentParser::getInstance();
+            $map = EnchantmentIdMap::getInstance();
+            $default = VanillaEnchantments::FORTUNE();
+            if($parser->parse("fortune") !== $default){
+                return false;
+            }
+
+            $replacement = new Enchantment($default->getName(), $default->getRarity(), 0, 0, 3);
+            $map->register(EnchantmentIds::FORTUNE, $replacement);
+            try{
+                $parser->register("minecraft:fortune", fn() => $replacement);
+                $pickaxe = VanillaItems::DIAMOND_PICKAXE()->addEnchantment(new EnchantmentInstance($replacement, 3));
+                $restored = Item::nbtDeserialize($pickaxe->nbtSerialize());
+                $duplicateRejected = false;
+                try{
+                    $parser->register("fortune", fn() => $replacement);
+                }catch(\InvalidArgumentException){
+                    $duplicateRejected = true;
+                }
+
+                return $duplicateRejected && $parser->parse("fortune") === $replacement
+                    && $restored->getEnchantmentLevel($replacement) === 3;
+            }finally{
+                $map->register(EnchantmentIds::FORTUNE, $default);
+                $parser->override("fortune", fn() => $default);
+            }
         });
         $this->check("legacy parser", function() : bool{
             $item = LegacyStringToItemParser::getInstance()->parse("diamond_sword:5");
