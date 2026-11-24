@@ -64,6 +64,7 @@ final class Main extends PluginBase implements Listener{
     private int $misses = 0;
     private int $fertilizations = 0;
     private int $craftInputMoves = 0;
+    private int $groupedMoves = 0;
     private int $enchantOpens = 0;
     private int $enchantCloses = 0;
     private ?Arrow $damageArrow = null;
@@ -88,6 +89,8 @@ final class Main extends PluginBase implements Listener{
         $inventory->setItem(2, VanillaBlocks::OAK_LOG()->asItem());
         $inventory->setItem(3, VanillaItems::BOOK());
         $inventory->setItem(4, VanillaItems::LAPIS_LAZULI()->setCount(3));
+        $inventory->setItem(20, VanillaItems::DIAMOND());
+        $inventory->setItem(21, VanillaItems::EMERALD());
         $player->getXpManager()->setXpLevel(10);
 
         $position = $player->getPosition();
@@ -303,10 +306,22 @@ final class Main extends PluginBase implements Listener{
 
     public function onInventoryTransaction(InventoryTransactionEvent $event) : void{
         $transaction = $event->getTransaction();
+        $slots = [];
         foreach($transaction->getActions() as $action){
+            if($action instanceof SlotChangeAction && $action->getInventory() === $transaction->getSource()->getInventory()
+                && $action->getSlot() >= 20 && $action->getSlot() <= 23){
+                $slots[] = $action->getSlot();
+            }
             if($action instanceof SlotChangeAction && $action->getSlot() === 2 &&
                 $action->getInventory() === $transaction->getSource()->getInventory() &&
                 $action->getSourceItem()->getFalconIdentifier() === 'minecraft:oak_log' && ++$this->craftInputMoves === 1){
+                $event->cancel();
+            }
+        }
+        if($slots !== []){
+            sort($slots);
+            self::expect($slots === [20, 21, 22, 23], 'a request exposes all four slots in one PHP event');
+            if(++$this->groupedMoves === 1){
                 $event->cancel();
             }
         }
@@ -398,6 +413,10 @@ final class Main extends PluginBase implements Listener{
             abs($this->arrowVictim->getHealth() - ($this->arrowVictim->getMaxHealth() - 0.5)) < 0.001,
             'native projectile applied the child damage listener amount');
         self::expect($this->craftInputMoves === 2, 'native inventory transaction cancellation and retry');
+        $inventory = $player->getInventory();
+        self::expect($this->groupedMoves === 2 && $inventory->getItem(20)->isNull() && $inventory->getItem(21)->isNull()
+            && $inventory->getItem(22)->equalsExact(VanillaItems::DIAMOND()) &&
+            $inventory->getItem(23)->equalsExact(VanillaItems::EMERALD()), 'group cancellation and retry moved both items exactly once');
         self::expect($this->enchantOpens === 1 && $this->enchantCloses === 1 && $player->getCurrentWindow() === null,
             'native inventory open and close events');
         self::expect($this->crafts === 2 && $inventory->getItem(5)->getFalconIdentifier() === 'minecraft:oak_planks' &&

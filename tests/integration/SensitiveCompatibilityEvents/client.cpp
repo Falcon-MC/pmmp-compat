@@ -307,6 +307,11 @@ namespace {
 
         send(connection, -17, {action(take, 2, slot(material, 0), slot(inventory, 4))});
         response(connection, -17, true);
+        for (const int id: {-19, -21}) {
+            send(connection, id, {action(place, 1, slot(inventory, 20), slot(inventory, 22)),
+                                  action(place, 1, slot(inventory, 21), slot(inventory, 23))});
+            response(connection, id, id == -21);
+        }
         ContainerClosePacket close;
         close.mWindowId = enchantWindow;
         close.mType = ContainerType::Enchantment;

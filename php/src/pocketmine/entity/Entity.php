@@ -344,8 +344,8 @@ abstract class Entity{
 	}
 
 	public function setScale(float $value) : void{
-		if($value <= 0){
-			throw new \InvalidArgumentException("Scale must be greater than 0");
+		if(!is_finite($value) || $value <= 0){
+			throw new \InvalidArgumentException("Scale must be finite and greater than 0");
 		}
 		$this->scale = $value;
 		if($this->drawn){
@@ -356,8 +356,9 @@ abstract class Entity{
 	public function getBoundingBox() : AxisAlignedBB{
 		if(!$this->drawn){
 			$position = $this->getPosition();
-			$half = $this->size->getWidth() / 2;
-			return new AxisAlignedBB($position->x - $half, $position->y, $position->z - $half, $position->x + $half, $position->y + $this->size->getHeight(), $position->z + $half);
+			$size = $this->getSize();
+			$half = $size->getWidth() / 2;
+			return new AxisAlignedBB($position->x - $half, $position->y, $position->z - $half, $position->x + $half, $position->y + $size->getHeight(), $position->z + $half);
 		}
 		return $this->boundingBox;
 	}

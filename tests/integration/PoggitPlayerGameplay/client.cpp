@@ -1,15 +1,18 @@
 #include "Network/Client/ClientNetworkSystem.h"
+#include "Protocol/Packets/AddPlayerPacket.h"
 #include "Protocol/Packets/CommandRequestPacket.h"
 #include "Protocol/Packets/EmotePacket.h"
 #include "Protocol/Packets/InventoryTransactionPacket.h"
 #include "Protocol/Packets/MovePlayerPacket.h"
 #include "Protocol/Packets/PlayerAuthInputPacket.h"
 #include "Protocol/Packets/RequestAbilityPacket.h"
+#include "Protocol/Packets/SetActorDataPacket.h"
 #include "Protocol/Packets/StartGamePacket.h"
 #include "Protocol/Packets/TextPacket.h"
 #include "Protocol/Packets/UpdateAbilitiesPacket.h"
 
 #include <chrono>
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -67,6 +70,23 @@ namespace {
         return allowed == receivedAllow && flying == receivedFlying;
     }
 
+    bool scaledDimensions(const EntityDataMap &metadata, float factor) {
+        bool scale = false;
+        bool width = false;
+        bool height = false;
+        for (const auto &entry: metadata.mEntries) {
+            if (entry.mFormat != EntityDataFormat::Float)
+                continue;
+            if (entry.mId == 38)
+                scale = std::abs(entry.mFloatValue - factor) < 0.001;
+            if (entry.mId == 53)
+                width = std::abs(entry.mFloatValue - 0.6f * factor) < 0.001;
+            if (entry.mId == 54)
+                height = std::abs(entry.mFloatValue - 1.8f * factor) < 0.001;
+        }
+        return scale && width && height;
+    }
+
     void send(BedrockConnection &client, const Packet &packet) {
         client.send(packet);
         client.flush();
@@ -75,9 +95,24 @@ namespace {
     void test(int port) {
         auto attacker = connect(port, "GameplayAttacker");
         auto target = connect(port, "GameplayTarget");
+        const auto attackerId = (int64_t) attacker->getStartGame()->mRuntimeActorId;
+        until(*attacker, [&](const Packet &packet) {
+            const auto *metadata = dynamic_cast<const SetActorDataPacket *>(&packet);
+            return metadata != nullptr && metadata->mRuntimeActorId == attackerId && scaledDimensions(metadata->mMetadata, 1.5f);
+        }, "scaled player did not receive its new dimensions");
+        until(*target, [&](const Packet &packet) {
+            const auto *spawn = dynamic_cast<const AddPlayerPacket *>(&packet);
+            return spawn != nullptr && spawn->mRuntimeActorId == attackerId && scaledDimensions(spawn->mMetadata, 1.5f);
+        }, "late-joining player did not receive the scaled spawn dimensions");
+
         Vector3i bed;
         bool bedReady = false;
+        bool normalScale = false;
+        bool pvpReady = false;
         until(*attacker, [&](const Packet &packet) {
+            if (const auto *metadata = dynamic_cast<const SetActorDataPacket *>(&packet)) {
+                normalScale |= metadata->mRuntimeActorId == attackerId && scaledDimensions(metadata->mMetadata, 1.0f);
+            }
             if (const auto *text = dynamic_cast<const TextPacket *>(&packet)) {
                 const std::string prefix = "gameplay-fixture-bed ";
                 if (text->mMessage.starts_with(prefix)) {
@@ -85,7 +120,8 @@ namespace {
                     bedReady = bool(coordinates >> bed.x >> bed.y >> bed.z);
                 }
             }
-            return bedReady && message(packet, "gameplay-fixture-pvp-ready");
+            pvpReady |= message(packet, "gameplay-fixture-pvp-ready");
+            return bedReady && normalScale && pvpReady;
         }, "position, motion, bed, speed or teleport setup failed");
 
         CommandRequestPacket command;
@@ -197,7 +233,8 @@ namespace {
                   << "XGTShowPlayerHP hearts reached the attacking client after real PvP\n"
                   << "PlayerEmoteEvent replacement reached the other client, and bed entry was cancelled\n"
                   << "Move, jump, sneak, glide and swim callbacks passed\n"
-                  << "Teleport cancellation result, facing and world redirect passed\n";
+                  << "Teleport cancellation result, facing and world redirect passed\n"
+                  << "Player scale, body dimensions and reset reached current and later viewers\n";
     }
 }
 

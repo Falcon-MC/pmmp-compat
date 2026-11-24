@@ -20,6 +20,7 @@ use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\event\server\LowMemoryEvent;
 use pocketmine\event\server\QueryRegenerateEvent;
+use pocketmine\event\server\UpdateNotifyEvent;
 use pocketmine\event\world\ChunkPopulateEvent;
 use pocketmine\event\world\SpawnChangeEvent;
 use pocketmine\event\world\WorldDifficultyChangeEvent;
@@ -307,6 +308,18 @@ final class Main extends PluginBase implements Listener{
     public function onMemory(LowMemoryEvent $event) : void{
         $this->observedLowMemory = $event->getMemory() === 2_000_000 && $event->getMemoryLimit() === 1_000_000
             && $event->isGlobal() && $event->getTriggerCount() === 7;
+    }
+
+    public function onUpdateNotify(UpdateNotifyEvent $event) : void{
+        $checker = $event->getUpdater();
+        $release = $checker->getUpdateInfo();
+        $expected = getenv('PMMP_COMPAT_TEST_UPDATE_TAG');
+        if($expected !== false){
+            self::expect($checker->hasUpdate() && $release !== null &&
+                $release->base_version === ltrim($expected, 'vV') && $release->date > 0 &&
+                str_contains($release->details_url, '/releases/tag/' . $expected), 'live Falcon update metadata');
+            $this->getLogger()->info("Falcon update notification delivered: $expected");
+        }
     }
 
     public function onQuery(QueryRegenerateEvent $event) : void{

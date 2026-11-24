@@ -549,6 +549,11 @@ final class Bridge{
      * applies the request, so cancelling refuses the whole of it.
      */
     private static function createTransaction(int $handle, Player $player, string $message) : ?array{
+        $batch = falcon_event_data($handle);
+        if($batch !== ''){
+            $actions = json_decode($batch, true, flags: JSON_THROW_ON_ERROR);
+            return $actions === [] ? null : self::createGroupedTransaction($player, $message, $handle, $actions);
+        }
         [$action, $source, $sourceSlot, $destination, $destinationSlot, $count] = falcon_event_transaction($handle);
         $manager = $player->getNetworkSession()->getInvManager();
         if($source === "container"){
@@ -592,6 +597,72 @@ final class Bridge{
             return null;
         }
         return self::state(new InventoryTransactionEvent(new InventoryTransaction($player, $actions)), $message, $handle);
+    }
+
+    /** @param list<array{string, string, int, string, int, int}> $moves */
+    private static function createGroupedTransaction(Player $player, string $message, int $handle, array $moves) : ?array{
+        $manager = $player->getNetworkSession()->getInvManager();
+        foreach($moves as [, $source, $sourceSlot, $destination, $destinationSlot]){
+            if($source === "container"){
+                $manager?->onMoved($sourceSlot);
+            }
+            if($destination === "container"){
+                $manager?->onMoved($destinationSlot);
+            }
+        }
+        if(!InventoryTransactionEvent::hasHandlers()){
+            return null;
+        }
+
+        $slots = [];
+        $resolve = static function(string $container, int $slot) use ($player, &$slots) : ?string{
+            $inventory = $slot >= 0 ? self::inventoryOf($player, $container) : null;
+            if($inventory === null){
+                return null;
+            }
+            if($inventory instanceof FalconBlockInventory){
+                $slot = $inventory->fromNativeSlot($slot);
+            }
+            if($slot >= $inventory->getSize()){
+                return null;
+            }
+            $key = spl_object_id($inventory) . ':' . $slot;
+            if(!isset($slots[$key])){
+                $item = $inventory->getItem($slot);
+                $slots[$key] = [$inventory, $slot, $item, $item];
+            }
+            return $key;
+        };
+
+        $actions = [];
+        foreach($moves as [$action, $source, $sourceSlot, $destination, $destinationSlot, $count]){
+            $from = $resolve($source, $sourceSlot);
+            $to = $resolve($destination, $destinationSlot);
+            if($from === $to){
+                continue;
+            }
+            $item = $from === null ? VanillaItems::AIR() : $slots[$from][3];
+            $before = $to === null ? VanillaItems::AIR() : $slots[$to][3];
+            $moved = (clone $item)->setCount(max(0, min($count, $item->getCount())));
+            if($from !== null){
+                $slots[$from][3] = $action === 'swap' ? $before : (clone $item)->setCount($item->getCount() - $moved->getCount());
+            }
+            if($action === 'drop'){
+                $actions[] = new DropItemAction($moved);
+            }elseif($action === 'destroy'){
+                $actions[] = new DestroyItemAction($moved);
+            }elseif($to !== null && ($action === 'swap' || !$moved->isNull())){
+                $slots[$to][3] = $action === 'swap' ? $item : ($before->canStackWith($moved)
+                    ? (clone $before)->setCount($before->getCount() + $moved->getCount()) : $moved);
+            }
+        }
+        foreach($slots as [$inventory, $slot, $before, $after]){
+            if(!$before->equalsExact($after)){
+                $actions[] = new SlotChangeAction($inventory, $slot, $before, $after);
+            }
+        }
+        return $actions === [] ? null :
+            self::state(new InventoryTransactionEvent(new InventoryTransaction($player, $actions)), $message, $handle);
     }
 
     /** the PocketMine-MP inventory a Falcon container name stands for */

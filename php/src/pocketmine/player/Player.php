@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace pocketmine\player;
 
 use pocketmine\command\CommandSender;
+use pocketmine\entity\EntitySizeInfo;
 use pocketmine\entity\Human;
 use pocketmine\entity\Location;
 use pocketmine\event\inventory\InventoryCloseEvent;
@@ -139,6 +140,7 @@ class Player extends Human implements CommandSender, IPlayer{
             $this->offlineGameMode = $this->getGamemode();
             $this->flying = $this->isFlying();
             $this->allowFlight = $this->getAllowFlight();
+            parent::setScale($this->getScale());
         }else{
             $this->online = false;
         }
@@ -584,6 +586,30 @@ class Player extends Human implements CommandSender, IPlayer{
         if($this->online && function_exists('falcon_player_set_allow_flight')){
             falcon_player_set_allow_flight($this->handle, $value);
         }
+    }
+
+    public function getScale() : float{
+        return ($this->online && function_exists('falcon_player_scale') ? falcon_player_scale($this->handle) : null)
+            ?? parent::getScale();
+    }
+
+    public function setScale(float $value) : void{
+        if($this->online && function_exists('falcon_player_set_scale') && falcon_player_set_scale($this->handle, $value) === false){
+            throw new \InvalidArgumentException('Invalid native player scale');
+        }
+        parent::setScale($value);
+    }
+
+    public function getSize() : EntitySizeInfo{
+        $scale = $this->getScale();
+        $size = $this->getInitialSizeInfo();
+        if($this->isSwimming() || $this->isGliding()){
+            $width = $size->getWidth();
+            $size = new EntitySizeInfo($width, $width, $width * 0.9);
+        }elseif($this->isSneaking()){
+            $size = new EntitySizeInfo(1.49, $size->getWidth(), $size->getEyeHeight() - 0.35);
+        }
+        return $size->scale($scale);
     }
 
     public function hasAutoJump() : bool{

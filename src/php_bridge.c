@@ -219,6 +219,15 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_nullable_bool, 0, 1, _IS_
     ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_nullable_double, 0, 1, IS_DOUBLE, 1)
+    ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_double_nullable_bool, 0, 2, _IS_BOOL, 1)
+    ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, value, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_two_texts_void, 0, 3, IS_VOID, 0)
     ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, first, IS_STRING, 0)
@@ -374,6 +383,29 @@ PHP_FUNCTION(falcon_player_set_flying) {
     if (FALCON_HAS(playerSetFlying))
         falcon->playerSetFlying(HANDLE(FalconPlayer, player), flying);
 #endif
+}
+
+PHP_FUNCTION(falcon_player_scale) {
+    HANDLE_ARGUMENT(player);
+#ifdef FALCON_API_PLAYER_SCALE
+    if (FALCON_HAS(playerScale))
+        RETURN_DOUBLE(falcon->playerScale(HANDLE(FalconPlayer, player)));
+#endif
+    RETURN_NULL();
+}
+
+PHP_FUNCTION(falcon_player_set_scale) {
+    zend_long player;
+    double scale;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(player)
+        Z_PARAM_DOUBLE(scale)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_PLAYER_SCALE
+    if (FALCON_HAS(playerSetScale))
+        RETURN_BOOL(falcon->playerSetScale(HANDLE(FalconPlayer, player), (float) scale) != 0);
+#endif
+    RETURN_NULL();
 }
 
 PHP_FUNCTION(falcon_player_name) {
@@ -682,6 +714,8 @@ static const zend_function_entry falcon_functions[] = {
     ZEND_RAW_FENTRY("falcon_player_set_allow_flight", ZEND_FN(falcon_player_set_allow_flight), arginfo_handle_flag_void, 0)
     ZEND_RAW_FENTRY("falcon_player_is_flying", ZEND_FN(falcon_player_is_flying), arginfo_handle_nullable_bool, 0)
     ZEND_RAW_FENTRY("falcon_player_set_flying", ZEND_FN(falcon_player_set_flying), arginfo_handle_flag_void, 0)
+    ZEND_RAW_FENTRY("falcon_player_scale", ZEND_FN(falcon_player_scale), arginfo_handle_nullable_double, 0)
+    ZEND_RAW_FENTRY("falcon_player_set_scale", ZEND_FN(falcon_player_set_scale), arginfo_handle_double_nullable_bool, 0)
     ZEND_RAW_FENTRY("falcon_listen", ZEND_FN(falcon_listen), arginfo_falcon_listen, 0)
     ZEND_RAW_FENTRY("falcon_player_name", ZEND_FN(falcon_player_name), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_player_xuid", ZEND_FN(falcon_player_xuid), arginfo_handle_string, 0)

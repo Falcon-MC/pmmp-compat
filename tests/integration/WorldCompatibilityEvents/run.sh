@@ -23,7 +23,9 @@ query_status=0
 if ! wait "$server" ||
    [[ "$query_status" -ne 0 ]] ||
    ! grep -F '[WorldCompatibilityEvents] world compatibility events passed' "$log" ||
-   grep -Fq 'Could not pass an event to the PocketMine-MP plugins' "$log"; then
+   grep -Fq 'Could not pass an event to the PocketMine-MP plugins' "$log" ||
+   { [[ -n "${PMMP_COMPAT_TEST_UPDATE_TAG:-}" ]] &&
+     ! grep -F "Falcon update notification delivered: $PMMP_COMPAT_TEST_UPDATE_TAG" "$log"; }; then
     cat "$log"
     exit 1
 fi

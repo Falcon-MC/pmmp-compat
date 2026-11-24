@@ -50,6 +50,13 @@ final class Main extends PluginBase implements Listener{
         if($player->getName() === self::ATTACKER){
             $player->setOp(true);
             $player->getArmorInventory()->setChestplate(VanillaItems::ELYTRA());
+            $player->setScale(1.5);
+            $player->setInvisible();
+            $size = $player->getSize();
+            $box = $player->getBoundingBox();
+            self::require($player->isInvisible() && abs($player->getScale() - 1.5) < 0.001
+                && abs($size->getWidth() - 0.9) < 0.001 && abs($size->getHeight() - 2.7) < 0.001
+                && abs($box->maxY - $box->minY - 2.7) < 0.001, 'Scaled player dimensions or native invisible state');
             return;
         }
         $attacker = $this->getServer()->getPlayerExact(self::ATTACKER);
@@ -57,6 +64,8 @@ final class Main extends PluginBase implements Listener{
             return;
         }
         $this->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($attacker, $player) : void{
+            $attacker->setScale(1.0);
+            $attacker->setInvisible(false);
             $position = $attacker->getPosition();
             $player->teleport($position->add(0, 0, 1.5));
             $originalMotion = $attacker->getMotion();
