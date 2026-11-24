@@ -66,6 +66,11 @@ expect_before "fixture: Gamma enabled" "fixture: Alpha enabled"
 
 # what is refused, and why
 expect "Could not load plugin 'OldApi': Incompatible API version (plugin requires one of: 4.0.0)"
+expect "Could not load plugin 'LegacyApi': Incompatible API version (plugin requires one of: 3.0.0)"
+if grep -Eq 'fixture: (LegacyApi|OldApi) (loaded|enabled|disabled)' "$log"; then
+    echo "an incompatible plugin executed a lifecycle callback"
+    failed=1
+fi
 expect "Could not load plugin 'Lonely': Unknown dependency: Nowhere"
 expect "Could not load plugin 'CycleA': Circular dependency detected"
 expect "Could not load plugin 'CycleB': Circular dependency detected"
@@ -80,7 +85,7 @@ expect "Could not load plugin 'FatalLoad': a fatal error or exit() stopped it"
 expect "fixture: FatalEnable enabling"
 expect "Could not enable plugin 'FatalEnable': a fatal error or exit() stopped it"
 expect "Could not enable plugin 'Exiter': a fatal error or exit() stopped it"
-expect "17 PocketMine-MP plugins loaded, 9 could not be"
+expect "17 PocketMine-MP plugins loaded, 10 could not be"
 
 # the plugin base: logger, config.yml, resources, Config, TextFormat
 expect "[Basics] logger says hello"

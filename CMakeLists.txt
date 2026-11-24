@@ -79,6 +79,7 @@ endif ()
 install(TARGETS PmmpCompat LIBRARY DESTINATION pmmp-compat RUNTIME DESTINATION pmmp-compat)
 install(FILES plugin.json DESTINATION pmmp-compat)
 install(DIRECTORY php DESTINATION pmmp-compat)
+install(FILES scripts/compatibility-report.php DESTINATION pmmp-compat/tools)
 if (WIN32)
     install(FILES "${PMMP_PHP_PREFIX}/php8ts.dll" DESTINATION pmmp-compat)
     # PocketMine-MP's build keeps these outside php8ts.dll: the plugin loads them at startup

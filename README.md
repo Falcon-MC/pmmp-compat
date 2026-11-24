@@ -79,6 +79,9 @@ plugins/
 Each plugin's data folder is `plugins/pmmp-compat/plugin_data/<name>/`, as PocketMine-MP lays it out, so
 existing `config.yml` files can be copied over.
 
+See the [migration guide](docs/migration.md) for staging, data folders and the offline compatibility report.
+The [Poggit survey](docs/poggit-survey.md) documents class and feature usage and how to reproduce the ranking.
+
 ### GameSpy Query
 
 Set `enable-query=true` in `server.properties` to serve GameSpy short and full statistics.
