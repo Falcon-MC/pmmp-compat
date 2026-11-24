@@ -119,7 +119,13 @@ final class Main extends PluginBase{
             $item = LegacyStringToItemParser::getInstance()->parse("diamond_sword:5");
             return $item->getDamage() === 5 && $item->equals(VanillaItems::DIAMOND_SWORD(), false);
         });
-        $this->check("aliases", fn() => in_array("diamond_sword", StringToItemParser::getInstance()->lookupAliases(VanillaItems::DIAMOND_SWORD()), true));
+        $this->check("aliases", function() : bool{
+            $parser = StringToItemParser::getInstance();
+            $aliases = $parser->getKnownAliases();
+            return in_array("diamond_sword", $parser->lookupAliases(VanillaItems::DIAMOND_SWORD()), true)
+                && in_array("stone", $aliases, true) && $parser->parse("stone") !== null
+                && ($parser->parse("item.bed") !== null || !in_array("item.bed", $aliases, true));
+        });
         $this->check("state registry", function() : bool{
             $glass = VanillaBlocks::GLASS();
             return RuntimeBlockStateRegistry::getInstance()->fromStateId($glass->getStateId())->isSameState($glass);

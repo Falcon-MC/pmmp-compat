@@ -47,6 +47,10 @@ final class StringToItemParser{
         if(isset($this->callbackMap[$key])){
             return ($this->callbackMap[$key])($key);
         }
+        return $this->parseVanilla($key);
+    }
+
+    private function parseVanilla(string $key) : ?Item{
         if($key === ""){
             return null;
         }
@@ -97,7 +101,10 @@ final class StringToItemParser{
         if($this->vanillaAliases === null){
             $this->vanillaAliases = [];
             foreach(\pocketmine\network\mcpe\convert\TypeConverter::getInstance()->getItemTypeDictionary()->getEntries() as $entry){
-                $this->vanillaAliases[self::normalise($entry->getStringId())] = true;
+                $key = self::normalise($entry->getStringId());
+                if($this->parseVanilla($key) !== null){
+                    $this->vanillaAliases[$key] = true;
+                }
             }
         }
         return array_map(strval(...), array_keys($this->callbackMap + $this->vanillaAliases));
