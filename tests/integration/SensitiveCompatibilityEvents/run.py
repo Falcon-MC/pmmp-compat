@@ -32,10 +32,11 @@ def run(server_bin, shim, client_bin, port):
     target.mkdir(parents=True)
     shutil.copytree(fixture / "src", target / "src")
     shutil.copy(fixture / "plugin.yml", target)
+    # Fixed terrain gives the fired arrow room to land outside pickup range.
     (work / "server.properties").write_text(
         f"server-port={port}\nserver-portv6={port + 1}\n"
         "transport=nethernet\nonline-mode=false\nallow-unofficial-clients=true\n"
-        "view-distance=6\nspawn-protection=0\n"
+        "view-distance=6\nspawn-protection=0\nlevel-seed=1896762365222302013\n"
     )
     log = work / "captured.log"
     with log.open("wb") as output, subprocess.Popen(

@@ -22,6 +22,7 @@ use pocketmine\item\enchantment\EnchantingOption;
 use pocketmine\item\enchantment\VanillaEnchantments;
 use pocketmine\item\VanillaItems;
 use pocketmine\math\Vector3;
+use pocketmine\player\Player;
 use pocketmine\plugin\PluginBase;
 use pocketmine\scheduler\ClosureTask;
 
@@ -80,6 +81,11 @@ final class Main extends PluginBase implements Listener{
         if(++$this->bows === 1){
             $event->cancel();
         }else{
+            $shooter = $event->getEntity();
+            self::expect($shooter instanceof Player, 'bow shooter');
+            $inventory = $shooter->getInventory();
+            self::expect($inventory->getItem(1)->getCount() === 2 && $inventory->getItem(0)->getDamage() === 0,
+                'cancelled shot spent ammo or durability');
             $event->setForce(0.25);
         }
     }
@@ -155,8 +161,11 @@ final class Main extends PluginBase implements Listener{
         $event->cancel();
         $player = $event->getPlayer();
         $inventory = $player->getInventory();
-        self::expect($this->bows === 2 && $this->launches === 1 && $inventory->getItem(1)->getCount() === 1 &&
-            $inventory->getItem(0)->getDamage() === 1, 'bow cancellation and consumption');
+        self::expect($this->bows === 2, "bow event count: {$this->bows}");
+        self::expect($this->launches === 1, "arrow launch count: {$this->launches}");
+        $arrows = $inventory->getItem(1)->getCount();
+        $damage = $inventory->getItem(0)->getDamage();
+        self::expect($arrows === 1 && $damage === 1, "bow consumption: $arrows arrows left, $damage durability spent");
         self::expect($this->crafts === 2 && $inventory->getItem(5)->getFalconIdentifier() === 'minecraft:oak_planks' &&
             $inventory->getItem(5)->getCount() === 4, 'craft rollback and retry');
         self::expect($this->enchants === 2 && $player->getXpManager()->getXpLevel() === 9 && $inventory->getItem(4)->getCount() === 2 &&
