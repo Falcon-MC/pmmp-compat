@@ -16,7 +16,7 @@
 
 The data directory uses the plugin name from `plugin.yml`, including its case. Copy declared dependencies and any data directories they own as well. If a plugin uses an external database, configure staging to use a separate copy so tests avoid changing production data.
 
-Configure the port, default world, authentication, access lists and permissions in Falcon. Test copied worlds and player data on staging before using them. PocketMine-MP APIs that access server internals, raw packets or storage can require changes. Review the [documented patches](../README.md#properduels-300) for the plugin versions listed there.
+Configure the port, default world, authentication, access lists and permissions in Falcon. Test copied worlds and player data on staging before using them. PocketMine-MP APIs that access server internals, raw packets or storage can require changes.
 
 ## Scan the plugins folder
 

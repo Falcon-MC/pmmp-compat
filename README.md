@@ -50,15 +50,6 @@ usual, and each class forwards to Falcon.
 
 Plugins keep their own license. Only the code in this repository is under the license below.
 
-## What will not work
-
-- **Raw packets**: plugins that read or send network packets directly rely on PocketMine-MP's own protocol
-  classes and its network threads. Some packets can be bridged one at a time, but full coverage is not a goal.
-- **Server internals**: classes outside the public API, or plugins that patch PocketMine-MP with reflection,
-  are not supported.
-- **Speed of the plugin itself**: Falcon's world, ticking and network get faster, but a plugin's own PHP code
-  runs as fast as it did on PocketMine-MP.
-
 ## Usage
 
 Put the compatibility plugin in Falcon's `plugins/` folder, then put your PocketMine-MP plugins in
@@ -83,55 +74,6 @@ See the [migration guide](docs/migration.md) for staging, data folders and the o
 The [Poggit survey](docs/poggit-survey.md) documents class and feature usage and how to reproduce the ranking.
 See [plugin services](docs/plugin-services.md) for calls between PHP plugins and native Falcon plugins.
 
-### GameSpy Query
-
-Set `enable-query=true` in `server.properties` to serve GameSpy short and full statistics.
-The listener defaults to UDP on `server-port` and binds to `0.0.0.0`. Set `query-ip` to choose
-a bind address. With RakNet, set `query-port` to a different UDP port from the game listener.
-Full statistics include data set by plugins through `QueryRegenerateEvent`.
-
-
-### ProperDuels 3.0.0
-
-The original Poggit release repeats the SQLite `Kits.Enabled` migration on restart. Create a patched
-copy with PHP CLI and Phar enabled:
-
-```sh
-php -d phar.readonly=0 scripts/patch-properduels.php ProperDuels_3.0.0.phar ProperDuels_3.0.0-patched.phar
-```
-
-Stop the server and replace the original PHAR in the plugins folder with the patched copy. Keep the
-existing `plugin_data/ProperDuels` directory so the plugin can reuse its database.
-
-### EasyEdit 3.1.0
-
-The Poggit release replaces PocketMine-MP's internal chunks when applying an edit. Use the patcher to
-write changed blocks to the live Falcon world and to let the editing worker start when conversion
-data are unavailable.
-
-```sh
-php -d phar.readonly=0 scripts/patch-easyedit.php EasyEdit_3.1.0.phar EasyEdit_3.1.0-patched.phar
-```
-
-Stop the server and replace the original archive in `plugins/pmmp-compat/plugins/` with the patched
-one. Keep any existing `plugin_data/EasyEdit/` directory. Coordinate selection, `//set` and `//undo`
-support ordinary blocks. Edits targeting block entities or blocks changed while
-the worker was running are rejected. External conversion data are required for the corresponding
-block tags.
-
-### CustomItemLoader 3.3.1
-
-Use the original Poggit archive and declare items in `plugin_data/CustomItemLoader/config.yml`.
-The compatibility layer registers the legacy item declarations before Falcon freezes its item registry.
-Falcon sends the resulting components in the client login registry. Deploy a resource pack separately
-when your configuration uses custom textures.
-
-### Economy plugins
-
-[BedrockEconomy, EconomyAPI, and transaction verification](tests/integration/PoggitEconomy/README.md)
-describes the tested provider versions, the opt-in BedrockEconomy alias patch, and the separate
-ChestShop and BankGUI configurations.
-
 ## Building
 
 Requires CMake 3.16+, a C++20 compiler and the thread-safe PHP 8 embed library the scripts set up:
@@ -144,19 +86,6 @@ cmake -B build -G Ninja
 cmake --build build
 cmake --install build --prefix dist
 ```
-
-## Testing
-
-The CI workflow builds Falcon at a pinned revision and runs the smoke suite on Linux, macOS, and Windows.
-The test server starts in a temporary directory and must stop cleanly before the test passes.
-
-```sh
-scripts/smoke-test.sh /path/to/FalconServer dist/pmmp-compat
-scripts/lifecycle-plugin-test.sh /path/to/FalconServer dist/pmmp-compat /path/to/StarterKit.phar /path/to/ScoreHud.phar
-```
-
-The lifecycle test uses StarterKit 4.0.1 and ScoreHud 8.0.0. It runs both plugins twice against the same world
-and plugin data to verify that the kit is only issued once and the scoreboard works after restarting.
 
 ## Related repositories
 
