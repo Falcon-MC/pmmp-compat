@@ -81,6 +81,15 @@ class PluginManager{
         $this->fileAssociations[get_class($loader)] = $loader;
     }
 
+    private function getStartupError(\Throwable $error) : string{
+        for($cause = $error; $cause !== null; $cause = $cause->getPrevious()){
+            if($cause instanceof \ReflectionException){
+                return 'PHP reflection failed: ' . $cause->getMessage();
+            }
+        }
+        return $error->getMessage();
+    }
+
     private function getDataDirectory(string $pluginPath, string $pluginName) : string{
         if($this->pluginDataDirectory !== null){
             return $this->pluginDataDirectory . '/' . $pluginName;
@@ -209,7 +218,7 @@ class PluginManager{
                     $loadErrorCount++;
                     continue;
                 }catch(\Throwable $e){
-                    Log::critical("Could not load plugin '$file': " . $e->getMessage());
+                    Log::critical("Could not load plugin '$file': " . $this->getStartupError($e));
                     Log::exception($e);
                     $loadErrorCount++;
                     continue;
@@ -318,7 +327,7 @@ class PluginManager{
             // a missing trait or parent class is a fatal error, not an exception
             $completed = falcon_guard($build);
         }catch(\Throwable $e){
-            Log::critical("Could not load plugin '$name': " . $e->getMessage());
+            Log::critical("Could not load plugin '$name': " . $this->getStartupError($e));
             Log::exception($e);
             return null;
         }
@@ -396,7 +405,7 @@ class PluginManager{
         }catch(DisablePluginException){
             $this->disablePlugin($plugin);
         }catch(\Throwable $e){
-            Log::critical("Could not enable plugin '$name': " . $e->getMessage());
+            Log::critical("Could not enable plugin '$name': " . $this->getStartupError($e));
             Log::exception($e);
             // the plugin is half enabled: onDisable() lets it undo what it did
             $this->disablePlugin($plugin);
