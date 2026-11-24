@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  FALCON_REVISION: 70f35296ec231e1711373b0efdf6761e9f7f5c73
+  FALCON_REVISION: fe2b58ab187d942e5cce715caf108f76a871ed59
 
 jobs:
   unix:
@@ -88,6 +88,7 @@ jobs:
         run: |
           scripts/smoke-test.sh "$PWD/falcon-bin/FalconServer" dist/pmmp-compat
           bash tests/integration/FormsPlayerPermissions/run.sh "$PWD/falcon-bin/FalconServer" dist/pmmp-compat
+          bash tests/integration/WorldCompatibilityEvents/run.sh "$PWD/falcon-bin/FalconServer" dist/pmmp-compat
 
       - uses: actions/upload-artifact@v4
         with:
@@ -159,6 +160,7 @@ jobs:
           cp dist/pmmp-compat/php8ts.dll falcon-bin/
           scripts/smoke-test.sh "$PWD/falcon-bin/FalconServer.exe" dist/pmmp-compat
           bash tests/integration/FormsPlayerPermissions/run.sh "$PWD/falcon-bin/FalconServer.exe" dist/pmmp-compat
+          bash tests/integration/WorldCompatibilityEvents/run.sh "$PWD/falcon-bin/FalconServer.exe" dist/pmmp-compat
 
       - uses: actions/upload-artifact@v4
         with:
