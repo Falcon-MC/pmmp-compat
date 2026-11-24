@@ -10,10 +10,12 @@ use pocketmine\block\VanillaBlocks;
 use pocketmine\entity\effect\EffectInstance;
 use pocketmine\entity\effect\VanillaEffects;
 use pocketmine\entity\object\FallingBlock;
+use pocketmine\entity\Zombie;
 use pocketmine\event\block\BlockUpdateEvent;
 use pocketmine\event\block\FarmlandHydrationChangeEvent;
 use pocketmine\event\entity\AreaEffectCloudApplyEvent;
 use pocketmine\event\entity\EntityBlockChangeEvent;
+use pocketmine\event\entity\EntitySpawnEvent;
 use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\event\server\LowMemoryEvent;
@@ -40,6 +42,8 @@ final class Main extends PluginBase implements Listener{
     private bool $observedNeighbour = false;
     private ?Vector3 $fallingBlockLanding = null;
     private bool $observedFallingBlock = false;
+    private bool $observedEntitySpawn = false;
+    private ?Vector3 $expectedEntitySpawn = null;
     private bool $observedSound = false;
     private bool $observedParticle = false;
     private bool $observedDisplayName = false;
@@ -108,11 +112,38 @@ final class Main extends PluginBase implements Listener{
 
         $pos = new Vector3($spawn->getFloorX(), min($spawn->getFloorY() + 3, $world->getMaxY() - 1), $spawn->getFloorZ());
         $oldBlock = $world->getBlock($pos);
-        $world->setBlock($pos, VanillaBlocks::DIAMOND_BLOCK());
+        $world->setBlock($pos, VanillaBlocks::OAK_SLAB());
         self::expect($this->observedNeighbour, 'neighbour update');
+        if($this->testNativeWorld){
+            $this->verifyBlockLayers($pos);
+        }
         $world->setBlock($pos, $oldBlock);
+        $this->expectedEntitySpawn = $pos->add(0.5, 1, 0.5);
+        $spawnAt = $this->expectedEntitySpawn;
+        self::expect($server->dispatchCommand($server->getConsoleSender(), "summon zombie {$spawnAt->x} {$spawnAt->y} {$spawnAt->z}"),
+            'summoned an entity to check its spawn snapshot');
 
         self::expect($server->dispatchCommand($server->getConsoleSender(), 'world create compat-events-fixture'), 'world create');
+    }
+
+    private function verifyBlockLayers(Vector3 $pos) : void{
+        $world = $this->getServer()->getWorldManager()->getDefaultWorld();
+        $x = $pos->getFloorX();
+        $y = $pos->getFloorY();
+        $z = $pos->getFloorZ();
+        $chunk = $world->getChunk($x >> 4, $z >> 4);
+        self::expect($chunk !== null, 'block-layer chunk is loaded');
+        $subChunk = $chunk->getSubChunk($y >> 4);
+        [$primary, $overlay] = $subChunk->getBlockLayers();
+        self::expect($primary->get($x, $y, $z) === $world->getBlockAt($x, $y, $z)->getStateId()
+            && $world->getBlockAt($x, $y, $z)->getFalconIdentifier() === 'minecraft:oak_slab', 'primary block in the subchunk');
+        $previous = $overlay->get($x, $y, $z);
+        $water = Block::fromFalcon('minecraft:water', '{"liquid_depth":0}')->getStateId();
+        $overlay->set($x, $y, $z, $water);
+        $otherView = $chunk->getSubChunk($y >> 4)->getBlockLayers()[1];
+        self::expect($otherView->get($x, $y, $z) === $water, 'overlay write is visible from a second subchunk view');
+        $otherView->set($x, $y, $z, $previous);
+        self::expect($overlay->get($x, $y, $z) === $previous, 'overlay restored through the second view');
     }
 
     private function exerciseFallingBlock() : void{
@@ -178,6 +209,7 @@ final class Main extends PluginBase implements Listener{
         $world = $this->getServer()->getWorldManager()->getDefaultWorld();
         self::expect($this->observedFallingBlock && $world->getBlock($this->fallingBlockLanding)->getFalconIdentifier() === 'minecraft:air',
             'falling block cancellation');
+        self::expect($this->observedEntitySpawn, 'spawn listener saw the entity in its world');
         $query = $this->getServer()->getQueryInformation();
         self::expect(($query->getExtraData()['fixture'] ?? '') === 'yes' &&
             str_contains($query->getLongQuery(), "fixture\0yes\0"), 'query override serialized');
@@ -293,6 +325,13 @@ final class Main extends PluginBase implements Listener{
             $event->getBlock()->getPosition()->equals($this->fallingBlockLanding)){
             $this->observedFallingBlock = $event->getTo()->getFalconIdentifier() === 'minecraft:sand';
             $event->cancel();
+        }
+    }
+
+    public function onEntitySpawn(EntitySpawnEvent $event) : void{
+        $entity = $event->getEntity();
+        if($entity instanceof Zombie && $this->expectedEntitySpawn?->equals($entity->getPosition()) === true){
+            $this->observedEntitySpawn = $entity->getWorld() === $this->getServer()->getWorldManager()->getDefaultWorld();
         }
     }
 

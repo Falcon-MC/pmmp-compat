@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  FALCON_REVISION: f1f475e725da1020bd2dffc18b1bba0cad116104
+  FALCON_REVISION: 9659a2699d4f3a2c9e5bcde9e69a7caa1361fbdd
   PMMP_COMPAT_TEST_NATIVE_WORLD_EVENTS: '1'
 
 jobs:
@@ -80,7 +80,11 @@ jobs:
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             args+=("-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)")
           fi
-          cmake -S falcon-source -B falcon-build -G Ninja -DCMAKE_BUILD_TYPE=Release "${args[@]}"
+          if ! cmake -S falcon-source -B falcon-build -G Ninja -DCMAKE_BUILD_TYPE=Release "${args[@]}"; then
+            bash scripts/fetch-falcon-stb.sh falcon-source falcon-stb
+            cmake -S falcon-source -B falcon-build -G Ninja -DCMAKE_BUILD_TYPE=Release "${args[@]}" \
+              -DFETCHCONTENT_SOURCE_DIR_STB_IMAGE="$PWD/falcon-stb"
+          fi
           cmake --build falcon-build --target FalconServer --parallel 4
           mkdir -p falcon-bin
           cp falcon-build/Falcon.Server/FalconServer falcon-bin/
@@ -143,7 +147,11 @@ jobs:
         run: |
           set -euo pipefail
           bash falcon-source/.github/msys2/install.sh .msys2-packages
-          cmake -S falcon-source -B falcon-build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          if ! cmake -S falcon-source -B falcon-build -G Ninja -DCMAKE_BUILD_TYPE=Release; then
+            bash scripts/fetch-falcon-stb.sh falcon-source falcon-stb
+            cmake -S falcon-source -B falcon-build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+              -DFETCHCONTENT_SOURCE_DIR_STB_IMAGE="$PWD/falcon-stb"
+          fi
           cmake --build falcon-build --target FalconServer --parallel 4
           mkdir -p falcon-bin
           cp falcon-build/Falcon.Server/FalconServer.exe falcon-bin/

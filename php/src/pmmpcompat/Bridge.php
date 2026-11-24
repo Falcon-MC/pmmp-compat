@@ -107,7 +107,7 @@ final class Bridge{
 
     /** what the runtime always listens to: it keeps its players, their forms, and whether they sneak, sprint or fly */
     private const ALWAYS = [self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_FORM_RESPONSE, self::INVENTORY_TRANSACTION,
-        self::PLAYER_TOGGLE_SNEAK, self::PLAYER_TOGGLE_SPRINT, self::PLAYER_TOGGLE_FLIGHT];
+        self::PLAYER_TOGGLE_SNEAK, self::PLAYER_TOGGLE_SPRINT, self::PLAYER_TOGGLE_FLIGHT, WorldEvents::WORLD_LOAD];
 
     /** the PocketMine-MP events each Falcon event becomes; Falcon passes it once a listener wants one of them */
     private const SOURCES = [
@@ -210,6 +210,7 @@ final class Bridge{
     /** @internal each of Falcon's ticks */
     public static function tick() : void{
         try{
+            Runtime::finishStartup();
             foreach(Players::online() as $player){
                 $player->getNetworkSession()->getInvManager()?->takeMoves();
             }
@@ -222,6 +223,8 @@ final class Bridge{
     }
 
     public static function event(int $type, int $priority, int $handle) : void{
+        $spawning = $type === WorldEvents::ENTITY_SPAWN ? falcon_event_entity($handle) : 0;
+        $runtimeId = $spawning !== 0 ? Entities::beginSpawn($spawning) : null;
         try{
             if($type === PlayerCompatibilityEvents::PLAYER_CREATION){
                 if($priority === EventPriority::LOWEST){
@@ -240,15 +243,22 @@ final class Bridge{
                 return;
             }
             $event = self::$inFlight[$handle]['event'];
+            $last = $priority === EventPriority::HIGHEST;
             self::callListeners($event, $priority);
-            if($priority === EventPriority::HIGHEST){
+            if($last){
                 self::callListeners($event, EventPriority::MONITOR);
             }
-            self::applyToFalcon($type, $handle, $priority === EventPriority::HIGHEST);
+            self::applyToFalcon($type, $handle, $last);
+            if($last && $type === WorldEvents::WORLD_LOAD){
+                Runtime::worldLoaded(falcon_event_level($handle));
+            }
         }catch(\Throwable $e){
             Log::critical('Could not pass an event to the PocketMine-MP plugins: ' . $e->getMessage());
             Log::exception($e);
         }finally{
+            if($runtimeId !== null){
+                Entities::endSpawn($runtimeId);
+            }
             if($priority === EventPriority::HIGHEST){
                 unset(self::$inFlight[$handle]);
                 if($type === self::PLAYER_QUIT){
@@ -660,9 +670,10 @@ final class Bridge{
         }
     }
 
-    private static function callListeners(Event $event, int $priority) : void{
+    /** @internal Dispatch a native event's listeners with independent error handling. */
+    public static function callListeners(Event $event, ?int $priority = null) : void{
         foreach(HandlerListManager::global()->getHandlersFor($event::class) as $listener){
-            if($listener->getPriority() !== $priority){
+            if($priority !== null && $listener->getPriority() !== $priority){
                 continue;
             }
             try{

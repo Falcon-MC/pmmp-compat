@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace pmmpcompat\world;
 
+use pocketmine\block\VanillaBlocks;
 use pocketmine\block\tile\Tile;
+use pocketmine\data\bedrock\BiomeIds;
 use pocketmine\world\format\Chunk;
+use pocketmine\world\format\PalettedBlockArray;
+use pocketmine\world\format\SubChunk;
 use pocketmine\world\World;
 
 /**
@@ -22,6 +26,28 @@ final class FalconChunk extends Chunk{
 
     public function getHeight() : int{
         return Chunk::MAX_SUBCHUNKS;
+    }
+
+    public function getSubChunk(int $y) : SubChunk{
+        if($y < self::MIN_SUBCHUNK_INDEX || $y > self::MAX_SUBCHUNK_INDEX){
+            throw new \InvalidArgumentException("Invalid subchunk Y coordinate $y");
+        }
+        $x = $this->chunkX << self::COORD_BIT_SIZE;
+        $z = $this->chunkZ << self::COORD_BIT_SIZE;
+        $blockY = $y << SubChunk::COORD_BIT_SIZE;
+        $air = VanillaBlocks::AIR()->getStateId();
+        return new SubChunk($air, [
+            PalettedBlockArray::forBlockLayer($this->world, $x, $blockY, $z, 0, $air),
+            PalettedBlockArray::forBlockLayer($this->world, $x, $blockY, $z, 1, $air),
+        ], new PalettedBlockArray(BiomeIds::OCEAN));
+    }
+
+    public function getSubChunks() : array{
+        $subChunks = [];
+        for($y = self::MIN_SUBCHUNK_INDEX; $y <= self::MAX_SUBCHUNK_INDEX; ++$y){
+            $subChunks[$y] = $this->getSubChunk($y);
+        }
+        return $subChunks;
     }
 
     private function worldX(int $x) : int{

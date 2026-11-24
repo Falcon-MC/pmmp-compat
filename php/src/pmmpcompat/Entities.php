@@ -76,6 +76,8 @@ final class Entities{
 
     /** @var Entity[] by runtime id */
     private static array $byId = [];
+    /** @var array<int, int> Borrowed handles while Falcon dispatches a spawn before registering the entity. */
+    private static array $spawning = [];
 
     private function __construct(){
     }
@@ -97,8 +99,25 @@ final class Entities{
     }
 
     public static function byId(int $runtimeId) : ?Entity{
-        $handle = falcon_server_entity($runtimeId);
+        $handle = self::handleOf($runtimeId);
         return $handle === 0 ? null : self::get($handle);
+    }
+
+    /** @internal */
+    public static function handleOf(int $runtimeId) : int{
+        return self::$spawning[$runtimeId] ?? falcon_server_entity($runtimeId);
+    }
+
+    /** @internal */
+    public static function beginSpawn(int $handle) : int{
+        $runtimeId = falcon_entity_runtime_id($handle);
+        self::$spawning[$runtimeId] = $handle;
+        return $runtimeId;
+    }
+
+    /** @internal */
+    public static function endSpawn(int $runtimeId) : void{
+        unset(self::$spawning[$runtimeId]);
     }
 
     /** Falcon's type of the stand-ins of plugins' entities, which no client sees */

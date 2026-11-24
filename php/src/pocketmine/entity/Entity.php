@@ -264,7 +264,7 @@ abstract class Entity{
 		if($this->closed){
 			return 0;
 		}
-		$handle = falcon_server_entity($this->id);
+		$handle = Entities::handleOf($this->id);
 		if($handle === 0 && !$this->drawn){
 			$this->closed = true;
 		}

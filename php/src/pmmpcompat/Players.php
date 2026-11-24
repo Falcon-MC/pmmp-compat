@@ -40,7 +40,7 @@ final class Players{
         $info = PlayerCompatibilityEvents::playerInfo($handle);
         $session = new NetworkSession(connectingHandle: $handle, playerInfo: $info, remotePort: $remotePort);
         $event = new PlayerCreationEvent($session);
-        $event->call();
+        Bridge::callListeners($event);
         $class = $event->getPlayerClass();
         $parameters = (new \ReflectionClass($class))->getConstructor()?->getParameters() ?? [];
         $connectionType = isset($parameters[1]) ? $parameters[1]->getType() : null;

@@ -23,6 +23,8 @@ final class Runtime{
 
     private static ?PluginManager $plugins = null;
     private static ?ServerLogger $logger = null;
+    /** @var array<int, true>|null The overworld handles awaiting their startup load event. */
+    private static ?array $startupWorlds = null;
 
     private function __construct(){
     }
@@ -82,14 +84,38 @@ final class Runtime{
 
         $errors = 0;
         $manager->loadPlugins($pluginsPath, $errors);
-        // the server is up by the time Falcon enables this plugin: both orders run now, startup first
-        $manager->enablePlugins(PluginEnableOrder::STARTUP);
-        $manager->enablePlugins(PluginEnableOrder::POSTWORLD);
-        $server->getResourcePackManager()->publish();
+        // Falcon has opened these worlds and will announce them before processing connections.
+        self::$startupWorlds = [];
+        foreach(falcon_worlds() as $levels){
+            if(isset($levels[0])){
+                self::$startupWorlds[$levels[0]] = true;
+            }
+        }
         Bridge::listen();
+        $manager->enablePlugins(PluginEnableOrder::STARTUP);
         $count = count($manager->getPlugins());
         Log::info($count . ' PocketMine-MP plugin' . ($count === 1 ? '' : 's') . ' loaded'
             . ($errors > 0 ? ', ' . $errors . ' could not be' : ''));
+    }
+
+    /** @internal Complete the second enable phase after the last startup world load. */
+    public static function worldLoaded(int $level) : void{
+        if(isset(self::$startupWorlds[$level])){
+            unset(self::$startupWorlds[$level]);
+            if(self::$startupWorlds === []){
+                self::finishStartup();
+            }
+        }
+    }
+
+    /** @internal The first tick also completes startup on hosts without startup world events. */
+    public static function finishStartup() : void{
+        if(self::$startupWorlds === null){
+            return;
+        }
+        self::$startupWorlds = null;
+        self::$plugins?->enablePlugins(PluginEnableOrder::POSTWORLD);
+        Server::getInstance()->getResourcePackManager()->publish();
     }
 
     // the constants PocketMine-MP defines at startup; the server's data folder is Falcon's
@@ -127,6 +153,7 @@ final class Runtime{
             self::$logger?->flush();
         }
         self::$plugins = null;
+        self::$startupWorlds = null;
     }
 
     public static function plugins() : ?PluginManager{

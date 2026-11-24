@@ -142,6 +142,45 @@ PHP_FUNCTION(falcon_level_set_block) {
                                       ZSTR_VAL(states)) != 0);
 }
 
+PHP_FUNCTION(falcon_level_get_block_layer) {
+    zend_long level, x, y, z, layer;
+    ZEND_PARSE_PARAMETERS_START(5, 5)
+        Z_PARAM_LONG(level)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(z)
+        Z_PARAM_LONG(layer)
+    ZEND_PARSE_PARAMETERS_END();
+    if (layer < 0 || layer > 1 || !FALCON_HAS(levelGetBlockLayer))
+        RETURN_NULL();
+
+    const char *states = NULL;
+    const char *name = falcon->levelGetBlockLayer(HANDLE(FalconLevel, level), BLOCK_POS(x, y, z),
+                                                  (uint32_t) layer, &states);
+    if (name == NULL)
+        RETURN_NULL();
+    array_init_size(return_value, 2);
+    add_next_index_string(return_value, name);
+    add_next_index_string(return_value, states != NULL ? states : "{}");
+}
+
+PHP_FUNCTION(falcon_level_set_block_layer) {
+    zend_long level, x, y, z, layer;
+    zend_string *name, *states;
+    ZEND_PARSE_PARAMETERS_START(7, 7)
+        Z_PARAM_LONG(level)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(z)
+        Z_PARAM_LONG(layer)
+        Z_PARAM_STR(name)
+        Z_PARAM_STR(states)
+    ZEND_PARSE_PARAMETERS_END();
+    RETURN_BOOL(layer >= 0 && layer <= 1 && FALCON_HAS(levelSetBlockLayer)
+        && falcon->levelSetBlockLayer(HANDLE(FalconLevel, level), BLOCK_POS(x, y, z), (uint32_t) layer,
+                                      ZSTR_VAL(name), ZSTR_VAL(states)) != 0);
+}
+
 PHP_FUNCTION(falcon_level_break_block) {
     zend_long level, x, y, z;
     bool drop;
@@ -825,6 +864,8 @@ const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_level_dimension)
     ENTRY(falcon_level_get_block)
     ENTRY(falcon_level_set_block)
+    ENTRY(falcon_level_get_block_layer)
+    ENTRY(falcon_level_set_block_layer)
     ENTRY(falcon_level_break_block)
     ENTRY(falcon_level_time)
     ENTRY(falcon_level_set_time)
