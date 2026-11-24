@@ -28,17 +28,32 @@ abstract class Liquid extends Transparent{
         return (((int) ($this->getStates()["liquid_depth"] ?? 0)) & 0x8) !== 0;
     }
 
+    public function setDecay(int $decay) : self{
+        if($decay < 0 || $decay > self::MAX_DECAY){
+            throw new \InvalidArgumentException('Invalid liquid decay ' . $decay);
+        }
+        $this->setState('liquid_depth', $decay | ($this->isFalling() ? 8 : 0));
+        return $this;
+    }
+
+    public function setFalling(bool $falling) : self{
+        $this->setState('liquid_depth', $this->getDecay() | ($falling ? 8 : 0));
+        return $this;
+    }
+
+    public function setStill(bool $still = true) : self{
+        $identifier = $this->getFalconIdentifier();
+        $base = str_replace('minecraft:flowing_', 'minecraft:', $identifier);
+        $this->setFalconIdentifier($still ? $base : str_replace('minecraft:', 'minecraft:flowing_', $base));
+        return $this;
+    }
+
     public function getStillForm() : static{
-        $identifier = str_replace('minecraft:flowing_', 'minecraft:', $this->getFalconIdentifier());
-        $block = Block::fromFalcon($identifier, $this->getFalconStates());
-        return $block instanceof static ? $block : clone $this;
+        return (clone $this)->setStill();
     }
 
     public function getFlowingForm() : static{
-        $identifier = 'minecraft:flowing_' . substr($this->getFalconIdentifier(), strrpos($this->getFalconIdentifier(), ':') + 1);
-        $identifier = str_replace('flowing_flowing_', 'flowing_', $identifier);
-        $block = Block::fromFalcon($identifier, $this->getFalconStates());
-        return $block instanceof static ? $block : clone $this;
+        return (clone $this)->setStill(false);
     }
 
     public function isStill() : bool{

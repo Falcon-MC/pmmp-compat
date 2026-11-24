@@ -96,6 +96,8 @@ class Block{
             $identifier === "minecraft:campfire" || $identifier === "minecraft:soul_campfire" => Campfire::class,
             $identifier === "minecraft:farmland" => Farmland::class,
             $identifier === "minecraft:snow_layer" => SnowLayer::class,
+            in_array($identifier, ["minecraft:sunflower", "minecraft:lilac", "minecraft:rose_bush", "minecraft:peony",
+                "minecraft:tall_grass", "minecraft:large_fern", "minecraft:pitcher_plant"], true) => DoublePlant::class,
             str_ends_with($identifier, "_leaves") => Leaves::class,
             $info === null => Block::class,
             !$info["solid"] => Flowable::class,
@@ -199,6 +201,13 @@ class Block{
     /** @internal the game's identifier */
     public function getFalconIdentifier() : string{
         return $this->identifier;
+    }
+
+    /** A block family may use distinct native identifiers for its variants. */
+    protected function setFalconIdentifier(string $identifier) : void{
+        $this->identifier = $identifier;
+        $this->idInfo = null;
+        self::$vanillaIdentifiers[crc32($identifier)] ??= $identifier;
     }
 
     /** @internal the states as Falcon's JSON */

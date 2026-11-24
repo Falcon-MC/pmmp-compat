@@ -97,7 +97,8 @@ final class VanillaBlocks{
             $itemless = ["minecraft:air", "minecraft:water", "minecraft:flowing_water", "minecraft:lava",
                 "minecraft:flowing_lava", "minecraft:fire", "minecraft:soul_fire", "minecraft:portal",
                 "minecraft:end_portal", "minecraft:end_gateway", "minecraft:bubble_column"];
-            if(!in_array($identifier, $itemless, true) && !falcon_item_exists($identifier)){
+            if(!in_array($identifier, $itemless, true) && !falcon_item_exists($identifier) &&
+                \pmmpcompat\ItemTypes::block($identifier) === null){
                 return null;
             }
             self::$prototypes[$identifier] = Block::fromFalcon($identifier, "{}");

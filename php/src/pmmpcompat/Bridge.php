@@ -108,7 +108,8 @@ final class Bridge{
 
     /** what the runtime always listens to: it keeps its players, their forms, and whether they sneak, sprint or fly */
     private const ALWAYS = [self::PLAYER_JOIN, self::PLAYER_QUIT, self::PLAYER_FORM_RESPONSE, self::INVENTORY_TRANSACTION,
-        self::PLAYER_TOGGLE_SNEAK, self::PLAYER_TOGGLE_SPRINT, self::PLAYER_TOGGLE_FLIGHT, WorldEvents::WORLD_LOAD];
+        self::PLAYER_TOGGLE_SNEAK, self::PLAYER_TOGGLE_SPRINT, self::PLAYER_TOGGLE_FLIGHT,
+        WorldEvents::WORLD_LOAD, WorldEvents::WORLD_UNLOAD];
 
     /** the PocketMine-MP events each Falcon event becomes; Falcon passes it once a listener wants one of them */
     private const SOURCES = [
@@ -237,8 +238,9 @@ final class Bridge{
             }
             if($priority === EventPriority::LOWEST){
                 if($type === WorldEvents::WORLD_LOAD){
-                    Server::getInstance()->getWorldManager()->refresh();
-                    \pmmpcompat\world\WorldGeneration::load(falcon_event_world_name($handle));
+                    $name = falcon_event_world_name($handle);
+                    Server::getInstance()->getWorldManager()->refresh($name);
+                    \pmmpcompat\world\WorldGeneration::load($name);
                 }
                 $event = self::create($type, $handle);
                 if($event === null){
@@ -258,6 +260,8 @@ final class Bridge{
             self::applyToFalcon($type, $handle, $last);
             if($last && $type === WorldEvents::WORLD_LOAD){
                 Runtime::worldLoaded(falcon_event_level($handle));
+            }elseif($last && $type === WorldEvents::WORLD_UNLOAD && !falcon_event_is_cancelled($handle)){
+                Server::getInstance()->getWorldManager()->observeUnload(falcon_event_world_name($handle));
             }
         }catch(\Throwable $e){
             Log::critical('Could not pass an event to the PocketMine-MP plugins: ' . $e->getMessage());
@@ -563,22 +567,26 @@ final class Bridge{
 
         $actions = [];
         $from = self::inventoryOf($player, $source);
+        $to = self::inventoryOf($player, $destination);
+        if($from instanceof FalconBlockInventory){
+            $sourceSlot = $from->fromNativeSlot($sourceSlot);
+        }
+        if($to instanceof FalconBlockInventory){
+            $destinationSlot = $to->fromNativeSlot($destinationSlot);
+        }
         if($from !== null && $sourceSlot >= 0){
             $actions[] = new SlotChangeAction($from, $sourceSlot, $item, $action === "swap"
-                ? (self::inventoryOf($player, $destination)?->getItem($destinationSlot) ?? VanillaItems::AIR()) : $left);
+                ? ($to?->getItem($destinationSlot) ?? VanillaItems::AIR()) : $left);
         }
         if($action === "drop"){
             $actions[] = new DropItemAction($moved);
         }elseif($action === "destroy"){
             $actions[] = new DestroyItemAction($moved);
-        }elseif($destination !== ""){
-            $to = self::inventoryOf($player, $destination);
-            if($to !== null && $destinationSlot >= 0){
-                $before = $to->getItem($destinationSlot);
-                $after = $action === "swap" ? $item : ($before->canStackWith($moved)
-                    ? (clone $before)->setCount($before->getCount() + $moved->getCount()) : $moved);
-                $actions[] = new SlotChangeAction($to, $destinationSlot, $before, $after);
-            }
+        }elseif($to !== null && $destinationSlot >= 0){
+            $before = $to->getItem($destinationSlot);
+            $after = $action === "swap" ? $item : ($before->canStackWith($moved)
+                ? (clone $before)->setCount($before->getCount() + $moved->getCount()) : $moved);
+            $actions[] = new SlotChangeAction($to, $destinationSlot, $before, $after);
         }
         if(count($actions) === 0){
             return null;

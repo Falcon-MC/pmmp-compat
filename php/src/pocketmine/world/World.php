@@ -59,6 +59,7 @@ class World implements ChunkManager{
 
     private int $id;
     private bool $loaded = true;
+    private ?int $unloadRequestedAt = null;
     private bool $autoSave = true;
     /** @var array<int, array<int, ChunkListener>> */
     private array $chunkListeners = [];
@@ -80,12 +81,26 @@ class World implements ChunkManager{
 
     /** @internal the Falcon level this world stands for */
     public function getHandle() : int{
+        if(!$this->isLoaded()){
+            throw new \LogicException("World {$this->folderName} is unloaded");
+        }
         return $this->level;
+    }
+
+    /** @internal Falcon closes worlds once the request's tick finishes. */
+    public function checkAfterUnload() : void{
+        $this->unloadRequestedAt = $this->getServer()->getTick();
+    }
+
+    /** @internal */
+    public function hasPendingUnloadCheck() : bool{
+        return $this->unloadRequestedAt !== null;
     }
 
     /** @internal */
     public function onUnload() : void{
         $this->loaded = false;
+        $this->unloadRequestedAt = null;
         $this->chunkListeners = [];
         $this->scheduledBlockUpdates = [];
         $this->scheduledBlockUpdateQueue = new ReversePriorityQueue();
@@ -101,6 +116,14 @@ class World implements ChunkManager{
     }
 
     public function isLoaded() : bool{
+        if($this->unloadRequestedAt !== null){
+            $requestedAt = $this->unloadRequestedAt;
+            $server = $this->getServer();
+            $server->getWorldManager()->refresh();
+            if($server->getTick() > $requestedAt + 1){
+                $this->unloadRequestedAt = null;
+            }
+        }
         return $this->loaded;
     }
 
@@ -157,7 +180,7 @@ class World implements ChunkManager{
         if(!$this->isInWorld($x, $y, $z)){
             return VanillaBlocks::AIR()->withPosition($this, $x, $y, $z);
         }
-        [$name, $states] = falcon_level_get_block($this->level, $x, $y, $z);
+        [$name, $states] = falcon_level_get_block($this->getHandle(), $x, $y, $z);
         return Block::fromFalcon($name, $states)->withPosition($this, $x, $y, $z);
     }
 
@@ -179,7 +202,7 @@ class World implements ChunkManager{
         }
         $listeners = $this->chunkListeners[self::chunkHash($x >> 4, $z >> 4)] ?? [];
         $oldState = $listeners === [] ? null : $this->getBlockAt($x, $y, $z)->getStateId();
-        $changed = falcon_level_set_block($this->level, $x, $y, $z, $block->getFalconIdentifier(), $block->getFalconStates());
+        $changed = falcon_level_set_block($this->getHandle(), $x, $y, $z, $block->getFalconIdentifier(), $block->getFalconStates());
         if($changed && $oldState !== null && $this->getBlockAt($x, $y, $z)->getStateId() !== $oldState){
             $pos = new Vector3($x, $y, $z);
             foreach($listeners as $listener){
@@ -195,7 +218,7 @@ class World implements ChunkManager{
 
     /** breaks the block as a player would, its drops falling */
     public function useBreakOn(Vector3 $vector, ?Item &$item = null, ?Player $player = null, bool $createParticles = false) : bool{
-        return falcon_level_break_block($this->level, (int) floor($vector->x), (int) floor($vector->y),
+        return falcon_level_break_block($this->getHandle(), (int) floor($vector->x), (int) floor($vector->y),
             (int) floor($vector->z), true);
     }
 
@@ -213,7 +236,7 @@ class World implements ChunkManager{
             return null;
         }
         if(!$this->isChunkLoaded($chunkX, $chunkZ)){
-            falcon_level_load_chunk($this->level, $chunkX, $chunkZ);
+            falcon_level_load_chunk($this->getHandle(), $chunkX, $chunkZ);
         }
         return $this->getChunk($chunkX, $chunkZ);
     }
@@ -438,7 +461,7 @@ class World implements ChunkManager{
      */
     public function getBlockCollisionBoxes(AxisAlignedBB $bb) : array{
         $boxes = [];
-        foreach(falcon_level_collision_boxes($this->level, $bb->minX, $bb->minY, $bb->minZ, $bb->maxX, $bb->maxY, $bb->maxZ) as [$minX, $minY, $minZ, $maxX, $maxY, $maxZ]){
+        foreach(falcon_level_collision_boxes($this->getHandle(), $bb->minX, $bb->minY, $bb->minZ, $bb->maxX, $bb->maxY, $bb->maxZ) as [$minX, $minY, $minZ, $maxX, $maxY, $maxZ]){
             $boxes[] = new AxisAlignedBB($minX, $minY, $minZ, $maxX, $maxY, $maxZ);
         }
         return $boxes;
@@ -492,25 +515,25 @@ class World implements ChunkManager{
     }
 
     public function isRaining() : bool{
-        return falcon_level_weather($this->level)[0];
+        return falcon_level_weather($this->getHandle())[0];
     }
 
     public function isThundering() : bool{
-        return falcon_level_weather($this->level)[1];
+        return falcon_level_weather($this->getHandle())[1];
     }
 
     /** sets the weather of the world, as Falcon's /weather does */
     public function setWeather(bool $raining, bool $thundering = false) : void{
-        falcon_level_set_weather($this->level, $raining, $thundering);
+        falcon_level_set_weather($this->getHandle(), $raining, $thundering);
     }
 
     /** an explosion Falcon makes: its damage, knockback and broken blocks are Falcon's */
     public function createExplosion(Vector3 $pos, float $size, bool $breakBlocks = true) : void{
-        falcon_level_explode($this->level, $pos->x, $pos->y, $pos->z, $size, $breakBlocks);
+        falcon_level_explode($this->getHandle(), $pos->x, $pos->y, $pos->z, $size, $breakBlocks);
     }
 
     public function strikeLightning(Vector3 $pos) : void{
-        falcon_level_lightning($this->level, $pos->x, $pos->y, $pos->z);
+        falcon_level_lightning($this->getHandle(), $pos->x, $pos->y, $pos->z);
     }
 
     public function setChunk(int $chunkX, int $chunkZ, Chunk $chunk) : void{
@@ -522,27 +545,27 @@ class World implements ChunkManager{
     }
 
     public function isChunkLoaded(int $chunkX, int $chunkZ) : bool{
-        return falcon_level_is_chunk_loaded($this->level, $chunkX, $chunkZ);
+        return $this->isLoaded() && falcon_level_is_chunk_loaded($this->getHandle(), $chunkX, $chunkZ);
     }
 
     public function getHighestBlockAt(int $x, int $z) : ?int{
-        $y = falcon_level_highest_block($this->level, $x, $z);
+        $y = falcon_level_highest_block($this->getHandle(), $x, $z);
         return $y < $this->getMinY() ? null : $y;
     }
 
     public function getSpawnLocation() : Position{
-        [$x, $y, $z] = falcon_level_spawn($this->level);
+        [$x, $y, $z] = falcon_level_spawn($this->getHandle());
         return new Position($x, $y, $z, $this);
     }
 
     public function setSpawnLocation(Vector3 $pos) : void{
-        if(!falcon_level_set_spawn($this->level, $pos->getFloorX(), $pos->getFloorY(), $pos->getFloorZ())){
+        if(!falcon_level_set_spawn($this->getHandle(), $pos->getFloorX(), $pos->getFloorY(), $pos->getFloorZ())){
             throw new \InvalidArgumentException("Could not set spawn to $pos");
         }
     }
 
     public function getTime() : int{
-        return falcon_level_time($this->level);
+        return falcon_level_time($this->getHandle());
     }
 
     public function getTimeOfDay() : int{
@@ -550,7 +573,7 @@ class World implements ChunkManager{
     }
 
     public function setTime(int $time) : void{
-        falcon_level_set_time($this->level, $time);
+        falcon_level_set_time($this->getHandle(), $time);
     }
 
     /**
@@ -571,7 +594,7 @@ class World implements ChunkManager{
      */
     public function getEntities() : array{
         $entities = [];
-        foreach(falcon_level_entities($this->level) as $handle){
+        foreach(falcon_level_entities($this->getHandle()) as $handle){
             $entity = Entities::get($handle);
             $entities[$entity->getId()] = $entity;
         }
@@ -594,10 +617,10 @@ class World implements ChunkManager{
             $motionComponents = [$motion->x, $motion->y, $motion->z];
         }
         if(!function_exists('falcon_level_spawn_item')){
-            falcon_level_drop_item($this->level, $source->x, $source->y, $source->z, $item->toFalcon());
+            falcon_level_drop_item($this->getHandle(), $source->x, $source->y, $source->z, $item->toFalcon());
             return null;
         }
-        $handle = falcon_level_spawn_item($this->level, $source->x, $source->y, $source->z, $item->toFalcon(), $delay,
+        $handle = falcon_level_spawn_item($this->getHandle(), $source->x, $source->y, $source->z, $item->toFalcon(), $delay,
             ...$motionComponents);
         return $handle === 0 ? null : Entities::get($handle);
     }

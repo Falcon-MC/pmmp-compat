@@ -7,6 +7,7 @@ namespace pmmpcompat\inventory;
 use pocketmine\block\inventory\BlockInventory;
 use pocketmine\block\inventory\BlockInventoryTrait;
 use pocketmine\block\inventory\BarrelInventory;
+use pocketmine\block\inventory\BrewingStandInventory;
 use pocketmine\block\inventory\ChestInventory;
 use pocketmine\block\inventory\HopperInventory;
 use pocketmine\block\inventory\ShulkerBoxInventory;
@@ -30,9 +31,15 @@ class FalconBlockInventory extends FalconSlotsInventory implements BlockInventor
             str_ends_with($name, "chest") && $name !== "minecraft:ender_chest" => new ChestInventory($position),
             $name === "minecraft:barrel" => new BarrelInventory($position),
             $name === "minecraft:hopper" => new HopperInventory($position),
+            $name === "minecraft:brewing_stand" => new BrewingStandInventory($position),
             str_ends_with($name, "shulker_box") => new ShulkerBoxInventory($position),
             default => new FalconBlockInventory($position),
         };
+    }
+
+    /** @internal Translate slots reported by the native container. */
+    public function fromNativeSlot(int $index) : int{
+        return $index;
     }
 
     private function place() : array{

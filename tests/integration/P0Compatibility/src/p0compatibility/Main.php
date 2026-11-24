@@ -6,6 +6,8 @@ namespace p0compatibility;
 
 use pocketmine\block\Block;
 use pocketmine\block\VanillaBlocks;
+use pocketmine\block\inventory\BrewingStandInventory;
+use pocketmine\block\tile\BrewingStand;
 use pocketmine\data\java\GameModeIdMap;
 use pocketmine\entity\object\ItemEntity;
 use pocketmine\event\entity\EntityCombustByBlockEvent;
@@ -82,6 +84,18 @@ final class Main extends PluginBase implements Listener{
             $placed = $world->getBlockAt($position->getFloorX(), $position->getFloorY(), $position->getFloorZ());
             self::expect($placed->isSameState($stone) && $placed->getTypeId() === $stone->getTypeId() &&
                 $placed->getName() === 'Stone' && $placed->getPosition()->getWorld() === $world, 'native block state');
+            $world->setBlock($position, VanillaBlocks::BREWING_STAND());
+            $tile = $world->getTile($position);
+            $inventory = $tile instanceof BrewingStand ? $tile->getInventory() : null;
+            self::expect($inventory instanceof BrewingStandInventory && $inventory->fromNativeSlot(0) === BrewingStandInventory::SLOT_BOTTLE_LEFT,
+                'native brewing inventory exposes PocketMine-MP slots');
+            $inventory->setItem(BrewingStandInventory::SLOT_INGREDIENT, VanillaItems::NETHER_WART());
+            $inventory->setItem(BrewingStandInventory::SLOT_BOTTLE_LEFT, VanillaItems::GLASS_BOTTLE());
+            $readNative = fn(int $slot) => falcon_level_container_item($world->getHandle(), $position->getFloorX(),
+                $position->getFloorY(), $position->getFloorZ(), $slot);
+            self::expect(($readNative(3)['id'] ?? null) === 'minecraft:nether_wart' &&
+                ($readNative(0)['id'] ?? null) === 'minecraft:glass_bottle', 'brewing writes the native ingredient and bottle slots');
+            $inventory->clearAll();
         }finally{
             $world->setBlockAt($position->getFloorX(), $position->getFloorY(), $position->getFloorZ(), $previous);
         }

@@ -57,6 +57,10 @@ exercise() {
         cat "$log"
         return 1
     fi
+    if grep -Fq 'Could not pass an event to the PocketMine-MP plugins' "$log"; then
+        cat "$log"
+        return 1
+    fi
     local marker
     for marker in 'Native-to-PHP service passed' 'PluginOwned and PHP-to-native service passed' 'Disabled plugin' "$@"; do
         if ! grep -F "$marker" "$log"; then
@@ -116,7 +120,12 @@ for profile in "${profiles[@]}"; do
             exercise 'CustomShopUI category, item and purchase forms passed' || result=1 ;;
         skyblock)
             setup "$profile" dresnite/SkyBlock/4.0.2/SkyBlock_4.0.2.phar
-            exercise 'SkyBlock generated and joined the Shelly island' || result=1 ;;
+            if exercise 'SkyBlock generated and joined the Shelly island'; then
+                mv "$run/captured.log" "$run/created.log"
+                exercise 'SkyBlock reloaded the same Shelly island' || result=1
+            else
+                result=1
+            fi ;;
         slapper)
             setup "$profile" vecnavium-pm-pl/Slapper/3.0.0/Slapper_3.0.0.phar
             exercise 'Slapper NPC, hit command and NBT passed' || result=1 ;;

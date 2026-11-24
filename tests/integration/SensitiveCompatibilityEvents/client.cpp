@@ -249,14 +249,14 @@ namespace {
             return text != nullptr && text->mMessage == "sensitive-fixture-projectiles-ok";
         }, "projectile outcomes not confirmed");
 
-        send(connection, -17, {action(place, 1, slot(inventory, 2), slot(crafting, 28))});
-        response(connection, -17, false);
         send(connection, -1, {action(place, 1, slot(inventory, 2), slot(crafting, 28))});
-        response(connection, -1, true);
-        for (const int id : {-3, -5}) {
+        response(connection, -1, false);
+        send(connection, -3, {action(place, 1, slot(inventory, 2), slot(crafting, 28))});
+        response(connection, -3, true);
+        for (const int id : {-5, -7}) {
             send(connection, id, {recipe(oakRecipe), action(consume, 1, slot(crafting, 28)),
                                   action(take, 4, slot(created, 50), slot(inventory, 5))});
-            response(connection, id, id == -5);
+            response(connection, id, id == -7);
         }
 
         InventoryTransactionPacket open;
@@ -277,9 +277,9 @@ namespace {
             return false;
         }, "enchanting table did not open");
 
-        send(connection, -7, {action(place, 3, slot(inventory, 4), slot(material, 0))});
-        response(connection, -7, true);
-        send(connection, -9, {action(place, 1, slot(inventory, 3), slot(input, 0))});
+        send(connection, -9, {action(place, 3, slot(inventory, 4), slot(material, 0))});
+        response(connection, -9, true);
+        send(connection, -11, {action(place, 1, slot(inventory, 3), slot(input, 0))});
         int enchantRecipe = 0;
         bool inputPlaced = false;
         until(connection, [&](Packet &packet) {
@@ -291,7 +291,7 @@ namespace {
             }
             if (const auto *response = dynamic_cast<ItemStackResponsePacket *>(&packet)) {
                 for (const auto &entry : response->mEntries) {
-                    if (entry.mRequestId == -9) {
+                    if (entry.mRequestId == -11) {
                         expect(entry.mResult == 0, "book could not be placed in the enchanting table");
                         inputPlaced = true;
                     }
@@ -299,14 +299,14 @@ namespace {
             }
             return enchantRecipe > 0 && inputPlaced;
         }, "modified enchant option was not delivered");
-        for (const int id : {-11, -13}) {
+        for (const int id : {-13, -15}) {
             send(connection, id, {recipe(enchantRecipe), action(consume, 1, slot(input, 0)),
                                   action(consume, 1, slot(material, 0)), action(take, 1, slot(created, 50), slot(inventory, 6))});
-            response(connection, id, id == -13);
+            response(connection, id, id == -15);
         }
 
-        send(connection, -15, {action(take, 2, slot(material, 0), slot(inventory, 4))});
-        response(connection, -15, true);
+        send(connection, -17, {action(take, 2, slot(material, 0), slot(inventory, 4))});
+        response(connection, -17, true);
         ContainerClosePacket close;
         close.mWindowId = enchantWindow;
         close.mType = ContainerType::Enchantment;

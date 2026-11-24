@@ -9,6 +9,7 @@ use pocketmine\block\Block;
 use pocketmine\block\Campfire;
 use pocketmine\block\Chest;
 use pocketmine\block\Liquid;
+use pocketmine\block\inventory\BrewingStandInventory;
 use pocketmine\block\tile\BrewingStand;
 use pocketmine\crafting\ExactRecipeIngredient;
 use pocketmine\crafting\PotionContainerChangeRecipe;
@@ -235,13 +236,17 @@ final class WorldCompatibilityEvents{
                 if(!$brewingStand instanceof BrewingStand){
                     return null;
                 }
-                $ingredient = new ExactRecipeIngredient($brewingStand->getInventory()->getItem(3));
+                $inventory = $brewingStand->getInventory();
+                if(!$inventory instanceof BrewingStandInventory){
+                    return null;
+                }
+                $ingredient = new ExactRecipeIngredient($inventory->getItem(BrewingStandInventory::SLOT_INGREDIENT));
                 $inputId = $item->getFalconIdentifier();
                 $outputId = $result->getFalconIdentifier();
                 $recipe = $inputId === $outputId
                     ? new PotionTypeRecipe(new ExactRecipeIngredient($item), $ingredient, $result)
                     : new PotionContainerChangeRecipe($inputId, $ingredient, $outputId);
-                return ['event' => new BrewItemEvent($brewingStand, $slot, $item, $result, $recipe),
+                return ['event' => new BrewItemEvent($brewingStand, $inventory->fromNativeSlot($slot), $item, $result, $recipe),
                     'result' => $result->toFalcon()];
         }
         return null;

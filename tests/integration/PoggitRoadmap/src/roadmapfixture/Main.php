@@ -107,6 +107,10 @@ final class Main extends PluginBase implements Listener{
         $multi = $manager->getWorldByName('RoadMulti');
         $world = $manager->getWorldByName('RoadWorld');
         self::check($multi !== null && $world !== null && $world->getBlockAt(0, 0, 0)->getTypeId() === VanillaBlocks::BEDROCK()->getTypeId(), 'both real commands generate worlds, including flat terrain');
+        $multiSpawn = $multi->getSpawnLocation();
+        $multi->loadChunk($multiSpawn->getFloorX() >> 4, $multiSpawn->getFloorZ() >> 4);
+        self::check($multi->getHighestBlockAt($multiSpawn->getFloorX(), $multiSpawn->getFloorZ()) !== null,
+            'MultiWorld generator wrote terrain');
         $server->dispatchCommand($player, 'worlds teleport RoadWorld');
         $this->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($player, $server, $manager, $multi, $world) : void{
             self::check($player->getWorld() === $world, 'Worlds teleported a player');
@@ -115,6 +119,13 @@ final class Main extends PluginBase implements Listener{
                 self::check($player->getWorld() === $multi, 'MultiWorld teleported a player');
                 self::check($manager->unloadWorld($world), 'unload world');
                 $this->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($manager, $world) : void{
+                    self::check(!$world->isLoaded(), 'retained wrapper observed deferred unload');
+                    try{
+                        $world->getBlockAt(0, 0, 0);
+                        throw new \RuntimeException('retained wrapper accepted native block read after unload');
+                    }catch(\LogicException){
+                        // Expected before the first access to a native handle.
+                    }
                     self::check(!$manager->isWorldLoaded('RoadWorld') && $manager->isWorldGenerated('RoadWorld'), 'unloaded world persisted');
                     self::check($manager->loadWorld('RoadWorld') && $manager->getWorldByName('RoadWorld') !== $world, 'reload creates a live handle');
                     $this->getLogger()->info('MultiWorld and Worlds generate, teleport and reload passed');
@@ -155,15 +166,27 @@ final class Main extends PluginBase implements Listener{
     private function skyBlock(Player $player) : void{
         $plugin = $this->getServer()->getPluginManager()->getPlugin('SkyBlock');
         self::check($plugin instanceof SkyBlock, 'SkyBlock enabled');
-        $this->getServer()->dispatchCommand($player, 'island create shelly');
+        $identityFile = $this->getDataFolder() . 'island-name';
         $session = $plugin->getSessionManager()->getSession($player);
-        self::check($session->hasIsland(), 'island created');
-        $world = $session->getIsland()->getWorld();
+        $restarted = is_file($identityFile);
+        if($restarted){
+            self::check($session->hasIsland(), 'island membership survived restart');
+            $island = $session->getIsland();
+            self::check($island->getWorld()->getFolderName() === file_get_contents($identityFile), 'same island world reloaded');
+            self::check($player->teleport($island->getSpawnLocation()), 'player can revisit reloaded island');
+        }else{
+            $this->getServer()->dispatchCommand($player, 'island create shelly');
+            self::check($session->hasIsland(), 'island created');
+            $island = $session->getIsland();
+            file_put_contents($identityFile, $island->getWorld()->getFolderName());
+        }
+        $world = $island->getWorld();
+        $world->loadChunk(0, 0);
         self::check($world->getBlockAt(11, 34, 9)->getTypeId() === VanillaBlocks::GRASS()->getTypeId(), 'Shelly generated its own terrain: ' . $world->getBlockAt(11, 34, 9)->getFalconIdentifier());
         self::check($world->getBlockAt(0, 10, 0)->getTypeId() === VanillaBlocks::AIR()->getTypeId(), 'surrounding world is void');
-        $this->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($player, $world) : void{
+        $this->getScheduler()->scheduleDelayedTask(new ClosureTask(function() use ($player, $world, $restarted) : void{
             self::check($player->getWorld() === $world, 'player joined island');
-            $this->getLogger()->info('SkyBlock generated and joined the Shelly island');
+            $this->getLogger()->info($restarted ? 'SkyBlock reloaded the same Shelly island' : 'SkyBlock generated and joined the Shelly island');
         }), 8);
     }
 

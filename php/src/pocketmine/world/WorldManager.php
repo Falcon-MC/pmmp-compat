@@ -43,13 +43,14 @@ class WorldManager{
     }
 
     /** @internal Refresh native handles after world load and deferred unload. */
-    public function refresh() : void{
+    public function refresh(?string $opened = null) : void{
         $active = [];
         foreach(falcon_worlds() as $worldName => $levels){
             foreach($levels as $dimension => $level){
                 $name = $worldName . (self::DIMENSION_NAMES[$dimension] ?? " $dimension");
                 $world = $this->byLevel[$level] ?? null;
-                if($world === null || $world->getFolderName() !== $name){
+                if($world === null || $world->getFolderName() !== $name ||
+                    ($opened === (string) $worldName && $world->hasPendingUnloadCheck())){
                     $world?->onUnload();
                     $world = new World($name, $dimension, $level);
                 }
@@ -61,6 +62,15 @@ class WorldManager{
             WorldGeneration::forget($world->getFolderName());
         }
         $this->byLevel = $active;
+    }
+
+    /** @internal Follow deferred unload for all dimensions while plugins may hold their World objects. */
+    public function observeUnload(string $name) : void{
+        foreach(falcon_worlds()[$name] ?? [] as $level){
+            if(isset($this->byLevel[$level])){
+                $this->byLevel[$level]->checkAfterUnload();
+            }
+        }
     }
 
     /** @internal the World for a Falcon level handle */
@@ -156,7 +166,7 @@ class WorldManager{
                     unlink($directory . '/' . $file);
                 }
             }
-            rmdir($directory);
+            @rmdir($directory);
         }
         return false;
     }
