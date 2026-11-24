@@ -115,6 +115,19 @@ support ordinary blocks. Edits targeting block entities or blocks changed while
 the worker was running are rejected. External conversion data are required for the corresponding
 block tags.
 
+### CustomItemLoader 3.3.1
+
+Use the original Poggit archive and declare items in `plugin_data/CustomItemLoader/config.yml`.
+The compatibility layer registers the legacy item declarations before Falcon freezes its item registry.
+Falcon sends the resulting components in the client login registry. Deploy a resource pack separately
+when your configuration uses custom textures.
+
+### Economy plugins
+
+[BedrockEconomy, EconomyAPI, and transaction verification](tests/integration/PoggitEconomy/README.md)
+describes the tested provider versions, the opt-in BedrockEconomy alias patch, and the separate
+ChestShop and BankGUI configurations.
+
 ## Building
 
 Requires CMake 3.16+, a C++20 compiler and the thread-safe PHP 8 embed library the scripts set up:

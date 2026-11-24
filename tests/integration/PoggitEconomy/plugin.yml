@@ -1,0 +1,5 @@
+name: EconomyProbe
+main: economyprobe\Probe
+version: 1.0.0
+api: 5.0.0
+softdepend: [BedrockEconomy, RankSystem, ChatGames, RankShopGUI, XPShop, EconomyAPI, BankGUI, ChestShop]
