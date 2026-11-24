@@ -14,6 +14,7 @@ use pocketmine\crafting\ExactRecipeIngredient;
 use pocketmine\crafting\PotionContainerChangeRecipe;
 use pocketmine\crafting\PotionTypeRecipe;
 use pocketmine\entity\Living;
+use pocketmine\data\bedrock\EffectIdMap;
 use pocketmine\entity\object\AreaEffectCloud;
 use pocketmine\event\block\BlockDeathEvent;
 use pocketmine\event\block\BlockPreExplodeEvent;
@@ -35,14 +36,20 @@ use pocketmine\event\world\ChunkPopulateEvent;
 use pocketmine\event\world\SpawnChangeEvent;
 use pocketmine\event\world\WorldDifficultyChangeEvent;
 use pocketmine\event\world\WorldInitEvent;
+use pocketmine\event\world\WorldParticleEvent;
+use pocketmine\event\world\WorldSoundEvent;
 use pocketmine\item\Item;
 use pocketmine\item\VanillaItems;
 use pocketmine\math\Vector3;
+use pocketmine\network\mcpe\NetworkBroadcastUtils;
+use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\player\Player;
 use pocketmine\Server;
 use pocketmine\world\BlockTransaction;
 use pocketmine\world\Position;
 use pocketmine\world\World;
+use pocketmine\world\particle\Particle;
+use pocketmine\world\sound\Sound;
 
 final class WorldCompatibilityEvents{
     private const BLOCK_DEATH = 91;
@@ -65,6 +72,8 @@ final class WorldCompatibilityEvents{
     private const AREA_EFFECT_CLOUD_APPLY = 108;
     private const BREW_ITEM = 110;
     private const UPDATE_NOTIFY = 111;
+    private const WORLD_SOUND = 112;
+    private const WORLD_PARTICLE = 113;
 
     public const SOURCES = [
         self::BLOCK_DEATH => [BlockDeathEvent::class],
@@ -87,6 +96,8 @@ final class WorldCompatibilityEvents{
         self::AREA_EFFECT_CLOUD_APPLY => [AreaEffectCloudApplyEvent::class],
         self::BREW_ITEM => [BrewItemEvent::class],
         self::UPDATE_NOTIFY => [UpdateNotifyEvent::class],
+        self::WORLD_SOUND => [WorldSoundEvent::class],
+        self::WORLD_PARTICLE => [WorldParticleEvent::class],
     ];
 
     private function __construct(){
@@ -103,6 +114,22 @@ final class WorldCompatibilityEvents{
         $world = $server->getWorldManager()->forLevel(falcon_event_level($handle));
         if($world === null){
             return null;
+        }
+        if($type === self::WORLD_SOUND || $type === self::WORLD_PARTICLE){
+            $position = new Vector3(...falcon_event_position($handle));
+            [$id, $payload] = falcon_event_packet($handle);
+            $packet = Packets::decode($id, $payload);
+            $media = new class($packet instanceof ClientboundPacket ? $packet : null) implements Sound, Particle{
+                public function __construct(private ?ClientboundPacket $packet){}
+                public function encode(Vector3 $pos) : array{
+                    return $this->packet === null ? [] : [$this->packet];
+                }
+            };
+            $viewers = array_values(array_filter(self::entities(self::readData($handle)),
+                static fn($recipient) => $recipient instanceof Player));
+            return ['event' => $type === self::WORLD_SOUND
+                ? new WorldSoundEvent($world, $media, $position, $viewers)
+                : new WorldParticleEvent($world, $media, $position, $viewers), 'nativeMedia' => $media];
         }
         switch($type){
             case self::WORLD_INIT:
@@ -127,7 +154,8 @@ final class WorldCompatibilityEvents{
             }
             $entity->recordApplication($data);
             return ['event' => new AreaEffectCloudApplyEvent($entity,
-                array_values(array_filter(self::entities($data['entities']), static fn($target) => $target instanceof Living)))];
+                array_values(array_filter(self::entities($data['entities']), static fn($target) => $target instanceof Living))),
+                'cloud' => $data, 'effects' => self::cloudEffects($entity)];
         }
         if($type === self::ENTITY_FROST_WALKER){
             $liquid = self::decodeBlock($data['liquid'] ?? []);
@@ -220,6 +248,37 @@ final class WorldCompatibilityEvents{
 
     public static function apply(int $handle, array &$state, bool $last) : void{
         $event = $state['event'];
+        if($event instanceof WorldSoundEvent || $event instanceof WorldParticleEvent){
+            if(!$last || $event->isCancelled()){
+                return;
+            }
+            $players = array_values(array_filter($event->getRecipients(), static fn(Player $player) =>
+                $player->isOnline() && $player->getWorld() === $event->getWorld()));
+            $media = $event instanceof WorldSoundEvent ? $event->getSound() : $event->getParticle();
+            if($media !== $state['nativeMedia']){
+                falcon_event_set_cancelled($handle, true);
+                if($players !== []){
+                    $packets = $media->encode($event->getPosition());
+                    if($packets !== []){
+                        NetworkBroadcastUtils::broadcastPackets($players, $packets);
+                    }
+                }
+            }else{
+                falcon_event_set_data($handle, json_encode(array_map(static fn(Player $player) => $player->getId(), $players),
+                    JSON_THROW_ON_ERROR));
+            }
+            return;
+        }
+        if($event instanceof AreaEffectCloudApplyEvent){
+            $effects = self::cloudEffects($event->getEntity());
+            if($effects !== $state['effects']){
+                $state['cloud']['effects'] = $effects;
+                falcon_event_set_data($handle, json_encode($state['cloud'], JSON_THROW_ON_ERROR));
+                $state['effects'] = $effects;
+            }
+            return;
+        }
+
         if($event instanceof BlockDeathEvent || $event instanceof PressurePlateUpdateEvent || $event instanceof EntityBlockChangeEvent){
             $block = self::encodeBlock($event instanceof EntityBlockChangeEvent ? $event->getTo() : $event->getNewState());
             if($block !== $state['block']){
@@ -286,6 +345,16 @@ final class WorldCompatibilityEvents{
         }elseif($last && $event instanceof ChunkPopulateEvent){
             $event->getWorld()->notifyChunkPopulated($event->getChunkX(), $event->getChunkZ(), $event->getChunk());
         }
+    }
+
+    private static function cloudEffects(AreaEffectCloud $cloud) : array{
+        $effectIds = EffectIdMap::getInstance();
+        $effects = [];
+        foreach($cloud->getEffects()->all() as $effect){
+            $effects[] = [$effectIds->toId($effect->getType()), $effect->isInfinite() ? -1 : $effect->getDuration(), $effect->getAmplifier(),
+                $effect->isVisible(), $effect->isAmbient()];
+        }
+        return $effects;
     }
 
     private static function readData(int $handle) : array{

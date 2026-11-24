@@ -79,6 +79,14 @@ plugins/
 Each plugin's data folder is `plugins/pmmp-compat/plugin_data/<name>/`, as PocketMine-MP lays it out, so
 existing `config.yml` files can be copied over.
 
+### GameSpy Query
+
+Set `enable-query=true` in `server.properties` to serve GameSpy short and full statistics.
+The listener defaults to UDP on `server-port` and binds to `0.0.0.0`. Set `query-ip` to choose
+a bind address. With RakNet, set `query-port` to a different UDP port from the game listener.
+Full statistics include data set by plugins through `QueryRegenerateEvent`.
+
+
 ### ProperDuels 3.0.0
 
 The original Poggit release repeats the SQLite `Kits.Enabled` migration on restart. Create a patched

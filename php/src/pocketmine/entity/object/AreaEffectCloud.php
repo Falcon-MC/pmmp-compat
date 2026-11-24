@@ -32,10 +32,11 @@ class AreaEffectCloud extends Entity{
         $this->reapplicationDelay = $data['reapplicationDelay'];
         $this->effects = new EffectCollection();
         $effectIds = EffectIdMap::getInstance();
-        foreach($data['effects'] as [$effectId, $duration, $amplifier]){
+        foreach($data['effects'] as $properties){
+            [$effectId, $duration, $amplifier, $visible, $ambient] = $properties + [3 => true, 4 => false];
             $effect = $effectIds->fromId($effectId);
             if($effect !== null){
-                $this->effects->add(new EffectInstance($effect, $duration, $amplifier));
+                $this->effects->add(new EffectInstance($effect, $duration === -1 ? 0x7fffffff : $duration, $amplifier, $visible, $ambient, infinite: $duration === -1));
             }
         }
     }

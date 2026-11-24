@@ -48,6 +48,7 @@ class Server{
     private ?CraftingManager $craftingManager = null;
     private int $tickCounter = 0;
     private ?\pocketmine\network\query\QueryInfo $queryInfo = null;
+    private ?\pmmpcompat\QuerySocket $querySocket = null;
     private ?\pocketmine\updater\UpdateChecker $updater = null;
     private ?MemoryManager $memoryManager = null;
 
@@ -96,7 +97,9 @@ class Server{
 
     /** @internal each of Falcon's ticks: the plugins' schedulers, then the async tasks */
     public function tick() : void{
-        ++$this->tickCounter;
+        if(++$this->tickCounter === 1){
+            $this->startQueryListener();
+        }
         $this->pluginManager->tickSchedulers($this->tickCounter);
         $this->worldManager->tickScheduledBlockUpdates($this->tickCounter);
         // what other threads asked for: their notifications, then the async tasks done, then their log lines
@@ -106,14 +109,36 @@ class Server{
         $this->resourcePackManager?->publish();
         $this->logger->flush();
         $this->getMemoryManager()->check();
-        if($this->tickCounter % 20 === 0){
+        if($this->tickCounter === 1 || $this->tickCounter % 20 === 0){
             $query = new \pocketmine\event\server\QueryRegenerateEvent(new \pocketmine\network\query\QueryInfo($this));
             $query->call();
             $this->queryInfo = $query->getQueryInfo();
         }
+        $this->querySocket?->tick($this->getQueryInformation());
         if($this->tickCounter % 1200 === 0){
             \pmmpcompat\Entities::forgetClosed();
         }
+    }
+
+    private function startQueryListener() : void{
+        $config = $this->getConfigGroup();
+        if($this->querySocket !== null || !$config->getConfigBool('enable-query', false)){
+            return;
+        }
+        try{
+            $this->querySocket = new \pmmpcompat\QuerySocket(
+                $config->getConfigString('query-ip', '0.0.0.0') ?: '0.0.0.0',
+                $config->getConfigInt('query-port', $this->getPort())
+            );
+        }catch(\RuntimeException|\InvalidArgumentException $error){
+            $this->logger->warning($error->getMessage() . '. Set query-port to a free UDP port when using RakNet.');
+        }
+    }
+
+    /** @internal */
+    public function stopQueryListener() : void{
+        $this->querySocket?->close();
+        $this->querySocket = null;
     }
 
     public function getQueryInformation() : \pocketmine\network\query\QueryInfo{
@@ -394,7 +419,7 @@ class Server{
     }
 
     public function getPort() : int{
-        return 19132;
+        return $this->getConfigGroup()->getConfigInt('server-port', 19132);
     }
 
     public function getPortV6() : int{

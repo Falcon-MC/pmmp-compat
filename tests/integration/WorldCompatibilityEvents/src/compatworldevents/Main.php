@@ -11,6 +11,7 @@ use pocketmine\event\block\BlockUpdateEvent;
 use pocketmine\event\block\FarmlandHydrationChangeEvent;
 use pocketmine\event\entity\EntityBlockChangeEvent;
 use pocketmine\event\Listener;
+use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\event\server\LowMemoryEvent;
 use pocketmine\event\server\QueryRegenerateEvent;
 use pocketmine\event\world\ChunkPopulateEvent;
@@ -22,6 +23,8 @@ use pocketmine\event\world\WorldLoadEvent;
 use pocketmine\event\world\WorldParticleEvent;
 use pocketmine\event\world\WorldSoundEvent;
 use pocketmine\math\Vector3;
+use pocketmine\network\mcpe\protocol\PlaySoundPacket;
+use pocketmine\network\mcpe\protocol\SpawnParticleEffectPacket;
 use pocketmine\plugin\PluginBase;
 use pocketmine\scheduler\ClosureTask;
 use pocketmine\world\particle\Particle;
@@ -40,8 +43,17 @@ final class Main extends PluginBase implements Listener{
     private bool $observedInit = false;
     private bool $initializedBeforeLoad = false;
     private bool $observedPopulate = false;
+    private bool $testNativeWorld = false;
+    private bool $startupInitSeen = false;
+    private bool $startupInitBeforeLoad = false;
+    private bool $checkingNativeMedia = false;
+    private bool $nativeSound = false;
+    private bool $nativeParticle = false;
+    private bool $nativeSoundReplacement = false;
+    private bool $nativeSoundSuppressed = false;
 
     protected function onEnable() : void{
+        $this->testNativeWorld = getenv('PMMP_COMPAT_TEST_NATIVE_WORLD_EVENTS') === '1';
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
         $this->getScheduler()->scheduleDelayedTask(new ClosureTask($this->exercise(...)), 5);
         $this->getScheduler()->scheduleDelayedTask(new ClosureTask($this->exerciseFallingBlock(...)), 35);
@@ -112,6 +124,17 @@ final class Main extends PluginBase implements Listener{
         $world->setBlock($platform->add(0, 2, 0), VanillaBlocks::AIR());
         $world->setBlock($sand, VanillaBlocks::SAND());
         self::expect($world->getBlock($sand)->getFalconIdentifier() === 'minecraft:sand', 'placed the falling block');
+
+        if($this->testNativeWorld){
+            $this->checkingNativeMedia = true;
+            try{
+                $server->dispatchCommand($server->getConsoleSender(), 'playsound random.pop Visitor');
+                $server->dispatchCommand($server->getConsoleSender(), 'playsound random.bow Visitor');
+                $server->dispatchCommand($server->getConsoleSender(), 'particle minecraft:basic_flame_particle 8 100 8');
+            }finally{
+                $this->checkingNativeMedia = false;
+            }
+        }
     }
 
     private function verify() : void{
@@ -123,6 +146,12 @@ final class Main extends PluginBase implements Listener{
         $query = $this->getServer()->getQueryInformation();
         self::expect(($query->getExtraData()['fixture'] ?? '') === 'yes' &&
             str_contains($query->getLongQuery(), "fixture\0yes\0"), 'query override serialized');
+        if($this->testNativeWorld){
+            self::expect($this->startupInitBeforeLoad, 'default world init before load');
+            self::expect($this->nativeSound && $this->nativeSoundReplacement && $this->nativeSoundSuppressed && $this->nativeParticle,
+                'native sound replacement and particle cancellation');
+            $this->getLogger()->info('native default world and media passed');
+        }
         $this->getLogger()->info('world compatibility events passed');
     }
 
@@ -139,11 +168,52 @@ final class Main extends PluginBase implements Listener{
     }
 
     public function onSound(WorldSoundEvent $event) : void{
+        if($this->checkingNativeMedia){
+            $packet = $event->getSound()->encode($event->getPosition())[0] ?? null;
+            if($packet instanceof PlaySoundPacket && $packet->soundName === 'random.pop'){
+                $this->nativeSound = count($event->getRecipients()) === 1
+                    && $event->getRecipients()[0]->getName() === 'Visitor';
+                $event->setSound(new class implements Sound{
+                    public function encode(Vector3 $pos) : array{
+                        return [PlaySoundPacket::create('random.orb', $pos->x, $pos->y, $pos->z, 1.0, 1.0)];
+                    }
+                });
+            }elseif($packet instanceof PlaySoundPacket && $packet->soundName === 'random.bow'){
+                $event->setSound(new class(function() : void{
+                    $this->nativeSoundSuppressed = true;
+                }) implements Sound{
+                    public function __construct(private \Closure $encode){}
+                    public function encode(Vector3 $pos) : array{
+                        ($this->encode)();
+                        return [];
+                    }
+                });
+            }
+            return;
+        }
         $this->observedSound = $event->getRecipients() === [];
         $event->cancel();
     }
 
+    public function onPacket(DataPacketSendEvent $event) : void{
+        if(!$this->checkingNativeMedia){
+            return;
+        }
+        foreach($event->getPackets() as $packet){
+            if($packet instanceof PlaySoundPacket && $packet->soundName === 'random.orb'){
+                $this->nativeSoundReplacement = count($event->getTargets()) === 1
+                    && $event->getTargets()[0]->getPlayer()?->getName() === 'Visitor';
+            }
+        }
+    }
+
     public function onParticle(WorldParticleEvent $event) : void{
+        if($this->checkingNativeMedia){
+            $packet = $event->getParticle()->encode($event->getPosition())[0] ?? null;
+            $this->nativeParticle = $packet instanceof SpawnParticleEffectPacket;
+            $event->cancel();
+            return;
+        }
         $this->observedParticle = $event->getRecipients() === [];
         $event->cancel();
     }
@@ -171,12 +241,18 @@ final class Main extends PluginBase implements Listener{
     }
 
     public function onWorldInit(WorldInitEvent $event) : void{
+        if($event->getWorld() === $this->getServer()->getWorldManager()->getDefaultWorld()){
+            $this->startupInitSeen = true;
+        }
         if($event->getWorld()->getFolderName() === 'compat-events-fixture'){
             $this->observedInit = true;
         }
     }
 
     public function onWorldLoad(WorldLoadEvent $event) : void{
+        if($event->getWorld() === $this->getServer()->getWorldManager()->getDefaultWorld()){
+            $this->startupInitBeforeLoad = $this->startupInitSeen;
+        }
         if($event->getWorld()->getFolderName() === 'compat-events-fixture'){
             $this->initializedBeforeLoad = $this->observedInit;
         }

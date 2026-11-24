@@ -116,6 +116,7 @@ final class Runtime{
         if(self::$plugins !== null){
             $server = Server::getInstance();
             try{
+                $server->stopQueryListener();
                 $server->getNetwork()->onShutdown();
                 $server->getAsyncPool()->shutdown();
                 // the threads plugins left running stop with the server, as PocketMine-MP's do
