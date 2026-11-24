@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  FALCON_REVISION: fe2b58ab187d942e5cce715caf108f76a871ed59
+  FALCON_REVISION: f1f475e725da1020bd2dffc18b1bba0cad116104
+  PMMP_COMPAT_TEST_NATIVE_WORLD_EVENTS: '1'
 
 jobs:
   unix:

@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace compatworldevents;
 
+use pocketmine\block\Block;
 use pocketmine\block\Farmland;
 use pocketmine\block\VanillaBlocks;
+use pocketmine\entity\effect\EffectInstance;
+use pocketmine\entity\effect\VanillaEffects;
 use pocketmine\entity\object\FallingBlock;
 use pocketmine\event\block\BlockUpdateEvent;
 use pocketmine\event\block\FarmlandHydrationChangeEvent;
+use pocketmine\event\entity\AreaEffectCloudApplyEvent;
 use pocketmine\event\entity\EntityBlockChangeEvent;
 use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketSendEvent;
@@ -51,6 +55,7 @@ final class Main extends PluginBase implements Listener{
     private bool $nativeParticle = false;
     private bool $nativeSoundReplacement = false;
     private bool $nativeSoundSuppressed = false;
+    private bool $nativeCloudReplaced = false;
 
     protected function onEnable() : void{
         $this->testNativeWorld = getenv('PMMP_COMPAT_TEST_NATIVE_WORLD_EVENTS') === '1';
@@ -134,7 +139,37 @@ final class Main extends PluginBase implements Listener{
             }finally{
                 $this->checkingNativeMedia = false;
             }
+            $this->exerciseCloud();
         }
+    }
+
+    private function exerciseCloud() : void{
+        $server = $this->getServer();
+        $player = $server->getPlayerExact('Visitor');
+        self::expect($player !== null, 'cloud has a simulated player');
+        $world = $player->getWorld();
+        $position = $player->getPosition();
+        $x = $position->getFloorX();
+        $y = $position->getFloorY();
+        $z = $position->getFloorZ();
+        $world->setBlockAt($x, $y - 1, $z, VanillaBlocks::STONE());
+        $world->setBlockAt($x, $y, $z, VanillaBlocks::AIR());
+        $world->setBlockAt($x, $y + 1, $z, VanillaBlocks::AIR());
+        $world->setBlockAt($x, $y + 2, $z, VanillaBlocks::AIR());
+        self::expect($player->teleport(new Vector3($x + 0.5, $y, $z + 0.5)), 'player in the cloud test area');
+
+        // Aim beside the player so the potion lands at their feet instead of hitting their head.
+        ++$x;
+        $world->setBlockAt($x, $y - 1, $z, VanillaBlocks::STONE());
+        $world->setBlockAt($x, $y, $z, VanillaBlocks::AIR());
+        $world->setBlockAt($x, $y + 1, $z, VanillaBlocks::AIR());
+        $world->setBlockAt($x, $y + 2, $z, VanillaBlocks::AIR());
+        $dispenserY = $y + 3;
+        $dispenser = Block::fromFalcon('minecraft:dispenser', '{"facing_direction":0,"triggered_bit":false}');
+        $world->setBlockAt($x, $dispenserY, $z, $dispenser);
+        self::expect($server->dispatchCommand($server->getConsoleSender(),
+            "replaceitem block $x $dispenserY $z slot.container 0 lingering_potion 1 17"), 'filled the potion dispenser');
+        $world->setBlockAt($x, $dispenserY + 1, $z, VanillaBlocks::REDSTONE_BLOCK());
     }
 
     private function verify() : void{
@@ -150,7 +185,14 @@ final class Main extends PluginBase implements Listener{
             self::expect($this->startupInitBeforeLoad, 'default world init before load');
             self::expect($this->nativeSound && $this->nativeSoundReplacement && $this->nativeSoundSuppressed && $this->nativeParticle,
                 'native sound replacement and particle cancellation');
+            $effects = $this->getServer()->getPlayerExact('Visitor')?->getEffects();
+            $speed = $effects?->get(VanillaEffects::SPEED());
+            self::expect($this->nativeCloudReplaced, 'native cloud offered its effects to the player');
+            self::expect($speed?->getAmplifier() === 2 && $speed->getDuration() <= 100
+                && $speed->getDuration() > 0 && !$speed->isVisible() && $speed->isAmbient()
+                && !$effects->has(VanillaEffects::SLOWNESS()), 'player received the replacement cloud effect');
             $this->getLogger()->info('native default world and media passed');
+            $this->getLogger()->info('native cloud replacement reached the player');
         }
         $this->getLogger()->info('world compatibility events passed');
     }
@@ -218,6 +260,18 @@ final class Main extends PluginBase implements Listener{
         $event->cancel();
     }
 
+    public function onCloudApply(AreaEffectCloudApplyEvent $event) : void{
+        if(!$this->testNativeWorld || $this->nativeCloudReplaced
+            || !in_array($this->getServer()->getPlayerExact('Visitor'), $event->getAffectedEntities(), true)){
+            return;
+        }
+        $effects = $event->getEntity()->getEffects();
+        self::expect($effects->has(VanillaEffects::SLOWNESS()), 'native cloud started with slowness');
+        $effects->clear();
+        $effects->add(new EffectInstance(VanillaEffects::SPEED(), 100, 2, false, true));
+        $this->nativeCloudReplaced = true;
+    }
+
     public function onMemory(LowMemoryEvent $event) : void{
         $this->observedLowMemory = $event->getMemory() === 2_000_000 && $event->getMemoryLimit() === 1_000_000
             && $event->isGlobal() && $event->getTriggerCount() === 7;
@@ -228,8 +282,10 @@ final class Main extends PluginBase implements Listener{
     }
 
     public function onBlockUpdate(BlockUpdateEvent $event) : void{
-        $this->observedNeighbour = true;
-        $event->cancel();
+        if(!$this->observedNeighbour){
+            $this->observedNeighbour = true;
+            $event->cancel();
+        }
     }
 
     public function onFallingBlockLand(EntityBlockChangeEvent $event) : void{
