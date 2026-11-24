@@ -166,7 +166,8 @@ class PluginDescription{
             }
             $this->order = $order;
         }else{
-            $this->order = PluginEnableOrder::POSTWORLD;
+            // This release builds its component declarations in onEnable, before Falcon freezes the item registry.
+            $this->order = $this->usesLegacyItemComponents() ? PluginEnableOrder::STARTUP : PluginEnableOrder::POSTWORLD;
         }
 
         $this->authors = [];
@@ -259,6 +260,13 @@ class PluginDescription{
 
     public function getOrder() : PluginEnableOrder{
         return $this->order;
+    }
+
+    /** @internal */
+    public function usesLegacyItemComponents() : bool{
+        return $this->name === "CustomItemLoader"
+            && $this->main === "alvin0319\\CustomItemLoader\\CustomItemLoader"
+            && $this->version === "3.3.1";
     }
 
     /** @return Permission[][] by default: op, notop, true, false */

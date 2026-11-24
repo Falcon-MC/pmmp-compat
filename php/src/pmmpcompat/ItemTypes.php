@@ -14,6 +14,10 @@ use pocketmine\item\ToolTier;
 final class ItemTypes{
     /** @var array<string, Item> */
     private static array $custom = [];
+    /** @var array<int, string> Native identifiers for older plugins that already cloned their item prototypes. */
+    private static array $customIdentifiersByType = [];
+    /** @var array<string, string> */
+    private static array $registeredComponents = [];
     /** @var array<string, array<string, mixed>|null> by identifier */
     private static array $items = [];
     /** @var array<string, array<string, mixed>|null> by identifier */
@@ -75,12 +79,50 @@ final class ItemTypes{
             if(falcon_item_info($identifier) === null){
                 falcon_register_custom_item($identifier, $item->getVanillaName(), $icon, $item->getMaxStackSize());
             }
-            $item->bindCustomIdentifier($identifier);
-            self::$custom[$identifier] = clone $item;
-            unset(self::$items[$identifier]);
+            self::rememberCustom($identifier, $item);
         }else{
             $item->bindCustomIdentifier($identifier);
         }
+    }
+
+    /** @internal */
+    public static function registerComponentItem(string $identifier, Item $item, string $components, string $category) : void{
+        if(!preg_match('~^(?!minecraft:)[a-z0-9_.-]+:[a-z0-9_./-]+$~D', $identifier)){
+            throw new \InvalidArgumentException("Invalid custom item identifier $identifier");
+        }
+        if(isset(self::$registeredComponents[$identifier])){
+            if(self::$registeredComponents[$identifier] !== $components || self::$custom[$identifier]->getTypeId() !== $item->getTypeId()){
+                throw new \InvalidArgumentException("Conflicting components for custom item $identifier");
+            }
+            return;
+        }
+        if(isset(self::$custom[$identifier]) || falcon_item_info($identifier) !== null){
+            throw new \InvalidArgumentException("Item $identifier is already registered");
+        }
+        $typeId = $item->getTypeId();
+        if(isset(self::$customIdentifiersByType[$typeId])){
+            throw new \InvalidArgumentException("Custom item type $typeId already has an identifier");
+        }
+
+        $icon = substr($identifier, strpos($identifier, ":") + 1);
+        if(!falcon_register_custom_item($identifier, $item->getVanillaName(), $icon, $item->getMaxStackSize(), $components, $category)){
+            throw new \RuntimeException("Falcon refused the custom item $identifier");
+        }
+
+        self::rememberCustom($identifier, $item);
+        self::$customIdentifiersByType[$typeId] = $identifier;
+        self::$registeredComponents[$identifier] = $components;
+    }
+
+    private static function rememberCustom(string $identifier, Item $item) : void{
+        $item->bindCustomIdentifier($identifier);
+        self::$custom[$identifier] = clone $item;
+        unset(self::$items[$identifier]);
+    }
+
+    /** @internal */
+    public static function customIdentifier(int $typeId) : ?string{
+        return self::$customIdentifiersByType[$typeId] ?? null;
     }
 
     public static function custom(string $identifier) : ?Item{

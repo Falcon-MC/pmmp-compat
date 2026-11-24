@@ -81,7 +81,7 @@ class Item implements \JsonSerializable{
      */
     public function nbtSerialize(int $slot = -1) : CompoundTag{
         $result = CompoundTag::create()
-            ->setString(self::TAG_NAME, $this->identifier)
+            ->setString(self::TAG_NAME, $this->getFalconIdentifier())
             ->setByte(self::TAG_COUNT, \pocketmine\utils\Binary::signByte($this->count))
             ->setShort(self::TAG_DAMAGE, $this->damage);
         $tag = $this->getNamedTag();
@@ -145,7 +145,7 @@ class Item implements \JsonSerializable{
     public function toFalcon() : array{
         $tag = $this->getNamedTag();
         return [
-            "id" => $this->identifier,
+            "id" => $this->getFalconIdentifier(),
             "count" => $this->count,
             "damage" => $this->damage,
             "nbt" => $tag->count() === 0 ? "" : (new LittleEndianNbtSerializer())->write(new TreeRoot($tag)),
@@ -154,6 +154,9 @@ class Item implements \JsonSerializable{
 
     /** @internal the game's identifier */
     public function getFalconIdentifier() : string{
+        if($this->identifierObject !== null && str_starts_with($this->identifier, "pmmpcompat:item_")){
+            return \pmmpcompat\ItemTypes::customIdentifier($this->identifierObject->getTypeId()) ?? $this->identifier;
+        }
         return $this->identifier;
     }
 
@@ -167,7 +170,7 @@ class Item implements \JsonSerializable{
     }
 
     public function getStateId() : int{
-        return crc32($this->identifier . ":" . $this->damage);
+        return crc32($this->getFalconIdentifier() . ":" . $this->damage);
     }
 
     public function getVanillaName() : string{
@@ -451,7 +454,7 @@ class Item implements \JsonSerializable{
 
     /** same type and damage, and the same NBT when checkCompound */
     public function equals(Item $item, bool $checkDamage = true, bool $checkCompound = true) : bool{
-        return $this->identifier === $item->identifier
+        return $this->getFalconIdentifier() === $item->getFalconIdentifier()
             && (!$checkDamage || $this->damage === $item->damage)
             && (!$checkCompound || $this->getNamedTag()->equals($item->getNamedTag()));
     }
@@ -473,7 +476,7 @@ class Item implements \JsonSerializable{
      * @return mixed[]
      */
     final public function jsonSerialize() : array{
-        $data = ["id" => $this->identifier];
+        $data = ["id" => $this->getFalconIdentifier()];
         if($this->count !== 1){
             $data["count"] = $this->count;
         }

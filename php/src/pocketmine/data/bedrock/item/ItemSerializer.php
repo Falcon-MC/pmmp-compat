@@ -11,7 +11,7 @@ use pocketmine\world\format\io\GlobalBlockStateHandlers;
 /** Items to the game's saved form */
 final class ItemSerializer{
     /** @var \Closure[] what plugins mapped their items with, by type id */
-    private array $serializers = [];
+    private array $itemSerializers = [];
     /** @var \Closure[] by block type id */
     private array $blockItemSerializers = [];
 
@@ -22,7 +22,7 @@ final class ItemSerializer{
                 \pmmpcompat\ItemTypes::registerCustom($data->getName(), $item);
             }
         }
-        $this->serializers[$item->getTypeId()] = $serializer;
+        $this->itemSerializers[$item->getTypeId()] = $serializer;
     }
 
     public function mapBlock(\pocketmine\block\Block $block, \Closure $serializer) : void{
@@ -33,8 +33,8 @@ final class ItemSerializer{
         if($item->isNull()){
             throw new ItemTypeSerializeException("Cannot serialize a null itemstack");
         }
-        if(isset($this->serializers[$item->getTypeId()])){
-            $data = ($this->serializers[$item->getTypeId()])($item);
+        if(isset($this->itemSerializers[$item->getTypeId()])){
+            $data = ($this->itemSerializers[$item->getTypeId()])($item);
             if($data instanceof SavedItemData){
                 return $data;
             }

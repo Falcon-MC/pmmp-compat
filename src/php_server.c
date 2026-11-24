@@ -294,13 +294,16 @@ PHP_FUNCTION(falcon_server_replace_resource_packs) {
 // --- what the game knows of item and block types ---
 
 PHP_FUNCTION(falcon_register_custom_item) {
-    zend_string *identifier, *name, *icon;
+    zend_string *identifier, *name, *icon, *components = NULL, *creativeCategory = NULL;
     zend_long maxStackSize;
-    ZEND_PARSE_PARAMETERS_START(4, 4)
+    ZEND_PARSE_PARAMETERS_START(4, 6)
         Z_PARAM_PATH_STR(identifier)
         Z_PARAM_PATH_STR(name)
         Z_PARAM_PATH_STR(icon)
         Z_PARAM_LONG(maxStackSize)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(components)
+        Z_PARAM_PATH_STR(creativeCategory)
     ZEND_PARSE_PARAMETERS_END();
     if (!FALCON_HAS(registerCustomItem) || maxStackSize < 1 || maxStackSize > 64)
         RETURN_FALSE;
@@ -309,7 +312,13 @@ PHP_FUNCTION(falcon_register_custom_item) {
     item.displayName = ZSTR_VAL(name);
     item.icon = ZSTR_VAL(icon);
     item.maxStackSize = (uint32_t) maxStackSize;
-    RETURN_BOOL(falcon->registerCustomItem(falcon_plugin, &item) != 0);
+    item.creativeCategory = creativeCategory == NULL ? NULL : ZSTR_VAL(creativeCategory);
+    if (components == NULL)
+        RETURN_BOOL(falcon->registerCustomItem(falcon_plugin, &item) != 0);
+    if (!FALCON_HAS(registerCustomItemWithComponents) || ZSTR_LEN(components) > FALCON_CUSTOM_ITEM_COMPONENTS_MAX_BYTES)
+        RETURN_FALSE;
+    const FalconCustomItemDescriptorV2 definition = {item, ZSTR_VAL(components), (uint32_t) ZSTR_LEN(components)};
+    RETURN_BOOL(falcon->registerCustomItemWithComponents(falcon_plugin, &definition) != 0);
 }
 
 PHP_FUNCTION(falcon_register_recipe) {

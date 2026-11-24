@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: bash build-client.sh /path/to/Falcon/build /path/to/output/client
+# Usage: bash build-client.sh /path/to/Falcon/build /path/to/output/client [client.cpp]
 set -euo pipefail
 
 fixture="$(cd "$(dirname "$0")" && pwd)"
@@ -12,7 +12,7 @@ crypto="$(sed -n 's/^OPENSSL_CRYPTO_LIBRARY:FILEPATH=//p' "$build/CMakeCache.txt
     -I"$deps/falcon_network-src/include" \
     -I"$deps/falcon_protocol-src/include" \
     -I"$deps/falcon_nbt-src/include" \
-    "$fixture/client.cpp" -o "$2" \
+    "${3:-$fixture/client.cpp}" -o "$2" \
     "$deps/falcon_network-build/libFalconNetwork.a" \
     "$deps/falcon_protocol-build/libFalconProtocol.a" \
     "$deps/falcon_nbt-build/libFalconNBT.a" \

@@ -340,15 +340,33 @@ final class ItemTypeIds{
 
     public const FIRST_UNUSED_ITEM_ID = 2145386496;
 
-    /**
-     * the ids given to plugins' types count up from just under 2^31: they fit in the 32-bit ints plugins save them
-     * as; the game's types are numbered from their identifiers
-     */
+    // Older plugins offset custom type IDs by 5000 and store the result in a signed short.
+    // Built-in item and block type IDs use unsigned hashes, leaving negative IDs for plugins.
+    private const LOWEST_SHORT_TYPE_ID = -32768 + 5000;
+    private static bool $useShortIds = false;
+    private static int $nextShortTypeId = -1;
     private static int $nextDynamicId = self::FIRST_UNUSED_ITEM_ID;
 
-    /** an id for a item type a plugin adds */
+    /** an id for an item type a plugin adds */
     public static function newId() : int{
-        return self::$nextDynamicId++;
+        if(!self::$useShortIds){
+            return self::$nextDynamicId++;
+        }
+        if(self::$nextShortTypeId < self::LOWEST_SHORT_TYPE_ID){
+            throw new \OverflowException("Custom item IDs for legacy components are exhausted");
+        }
+        return self::$nextShortTypeId--;
+    }
+
+    /** @internal */
+    public static function withLegacyComponentIds(\Closure $callback) : bool{
+        $previous = self::$useShortIds;
+        self::$useShortIds = true;
+        try{
+            return $callback();
+        }finally{
+            self::$useShortIds = $previous;
+        }
     }
 
     /** a block's item has the block's type id here: both are the identifier's */

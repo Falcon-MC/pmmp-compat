@@ -25,16 +25,18 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
 
+use pocketmine\nbt\tag\CompoundTag;
+
 final class ItemTypeEntry{
 	/**
-	 * @phpstan-param CacheableNbt<\pocketmine\nbt\tag\CompoundTag> $componentNbt
+	 * @phpstan-param CacheableNbt<CompoundTag>|null $componentNbt
 	 */
 	public function __construct(
 		private string $stringId,
 		private int $numericId,
 		private bool $componentBased,
-		private int $version,
-		private CacheableNbt $componentNbt
+		private int $version = 0,
+		private ?CacheableNbt $componentNbt = null
 	){}
 
 	public function getStringId() : string{ return $this->stringId; }
@@ -46,5 +48,7 @@ final class ItemTypeEntry{
 	public function getVersion() : int{ return $this->version; }
 
 	/** @phpstan-return CacheableNbt<\pocketmine\nbt\tag\CompoundTag> */
-	public function getComponentNbt() : CacheableNbt{ return $this->componentNbt; }
+	public function getComponentNbt() : CacheableNbt{
+		return $this->componentNbt ??= new CacheableNbt(CompoundTag::create());
+	}
 }

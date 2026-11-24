@@ -10,6 +10,7 @@ use pocketmine\network\mcpe\protocol\ClientboundCloseFormPacket;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\network\mcpe\protocol\ContainerClosePacket;
 use pocketmine\network\mcpe\protocol\ContainerOpenPacket;
+use pocketmine\network\mcpe\protocol\ItemComponentPacket;
 use pocketmine\player\Player;
 use pocketmine\player\PlayerInfo;
 
@@ -112,6 +113,9 @@ class NetworkSession{
     public function sendWithoutEvent(ClientboundPacket $packet) : bool{
         if(!$this->player?->isOnline()){
             return false;
+        }
+        if($packet instanceof ItemComponentPacket){
+            return true;
         }
         [$id, $payload] = Packets::encode($this->withWindowId($packet));
         return falcon_player_send_packet($this->player->getHandle(), $id, $payload);

@@ -60,6 +60,20 @@ final class ItemTypeDictionary{
 		return $this->itemTypes;
 	}
 
+	/** @internal Replaces a plugin's preliminary registration with the server's network ID. */
+	public function setEntry(ItemTypeEntry $entry) : void{
+		$name = $entry->getStringId();
+		$id = $entry->getNumericId();
+		$previous = $this->stringToIntMap[$name] ?? null;
+		if($previous !== null && ($this->intToStringIdMap[$previous] ?? null) === $name){
+			unset($this->intToStringIdMap[$previous]);
+		}
+		$this->stringToIntMap[$name] = $id;
+		$this->intToStringIdMap[$id] = $name;
+		$this->itemTypes = array_values(array_filter($this->itemTypes, static fn(ItemTypeEntry $old) => $old->getStringId() !== $name));
+		$this->itemTypes[] = $entry;
+	}
+
 	public function fromStringId(string $stringId) : int{
 		if(!array_key_exists($stringId, $this->stringToIntMap)){
 			throw new \InvalidArgumentException("Unmapped string ID \"$stringId\"");

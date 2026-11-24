@@ -385,7 +385,9 @@ class PluginManager{
         Log::info('Enabling ' . $description->getFullName());
         $plugin->getScheduler()->setEnabled(true);
         try{
-            if(!falcon_guard(static fn() => $plugin->onEnableStateChange(true))){
+            $enable = static fn() : bool => falcon_guard(static fn() => $plugin->onEnableStateChange(true));
+            $enabled = $description->usesLegacyItemComponents() ? \pocketmine\item\ItemTypeIds::withLegacyComponentIds($enable) : $enable();
+            if(!$enabled){
                 Log::critical("Could not enable plugin '$name': " . self::FATAL);
                 $this->forget($plugin);
                 return false;
