@@ -51,6 +51,21 @@ FalconItem *item_from_array(HashTable *data) {
     return item;
 }
 
+// Slot setters take a null handle for empty slots, independently of the runtime ID of the air item.
+static bool slot_item_from_array(HashTable *data, FalconItem **out) {
+    zval *id = zend_hash_str_find(data, "id", sizeof("id") - 1);
+    if (id == NULL || Z_TYPE_P(id) != IS_STRING)
+        return false;
+    zval *count = zend_hash_str_find(data, "count", sizeof("count") - 1);
+    if (zend_string_equals_literal(Z_STR_P(id), "minecraft:air")
+        || (count != NULL && Z_TYPE_P(count) == IS_LONG && Z_LVAL_P(count) <= 0)) {
+        *out = NULL;
+        return true;
+    }
+    *out = item_from_array(data);
+    return *out != NULL;
+}
+
 // an owned copy from an inventory: read, then given back
 static void return_owned_item(zval *return_value, FalconItem *item) {
     if (item == NULL)
@@ -108,6 +123,25 @@ PHP_FUNCTION(falcon_server_version) {
 PHP_FUNCTION(falcon_default_world) {
     ZEND_PARSE_PARAMETERS_NONE();
     return_text(return_value, falcon->serverDefaultWorldName());
+}
+
+PHP_FUNCTION(falcon_world_load) {
+    zend_string *name, *seed;
+    bool create;
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_PATH_STR(name)
+        Z_PARAM_BOOL(create)
+        Z_PARAM_PATH_STR(seed)
+    ZEND_PARSE_PARAMETERS_END();
+    RETURN_BOOL(FALCON_HAS(serverLoadWorld) && falcon->serverLoadWorld(ZSTR_VAL(name), create, ZSTR_VAL(seed)) != 0);
+}
+
+PHP_FUNCTION(falcon_world_unload) {
+    zend_string *name;
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_PATH_STR(name)
+    ZEND_PARSE_PARAMETERS_END();
+    RETURN_BOOL(FALCON_HAS(serverUnloadWorld) && falcon->serverUnloadWorld(ZSTR_VAL(name)) != 0);
 }
 
 PHP_FUNCTION(falcon_level_dimension) {
@@ -242,6 +276,19 @@ PHP_FUNCTION(falcon_level_entities) {
     }
 }
 
+PHP_FUNCTION(falcon_level_load_chunk) {
+    zend_long level, chunkX, chunkZ;
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_LONG(level)
+        Z_PARAM_LONG(chunkX)
+        Z_PARAM_LONG(chunkZ)
+    ZEND_PARSE_PARAMETERS_END();
+    if (chunkX < INT32_MIN || chunkX > INT32_MAX || chunkZ < INT32_MIN || chunkZ > INT32_MAX)
+        RETURN_FALSE;
+    RETURN_BOOL(FALCON_HAS(levelLoadChunk) &&
+                falcon->levelLoadChunk(HANDLE(FalconLevel, level), (int32_t) chunkX, (int32_t) chunkZ) != 0);
+}
+
 PHP_FUNCTION(falcon_level_is_chunk_loaded) {
     zend_long level, chunkX, chunkZ;
     ZEND_PARSE_PARAMETERS_START(3, 3)
@@ -279,6 +326,72 @@ PHP_FUNCTION(falcon_level_drop_item) {
     falcon->levelDropItem(HANDLE(FalconLevel, level), (FalconVec3){x, y, z}, created);
     falcon->itemDestroy(created);
     RETURN_TRUE;
+}
+
+PHP_FUNCTION(falcon_level_spawn_item) {
+    zend_long level, delay;
+    double x, y, z;
+    FalconVec3 motion = {0};
+    HashTable *item;
+    ZEND_PARSE_PARAMETERS_START(6, 9)
+        Z_PARAM_LONG(level)
+        Z_PARAM_DOUBLE(x)
+        Z_PARAM_DOUBLE(y)
+        Z_PARAM_DOUBLE(z)
+        Z_PARAM_ARRAY_HT(item)
+        Z_PARAM_LONG(delay)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_DOUBLE(motion.x)
+        Z_PARAM_DOUBLE(motion.y)
+        Z_PARAM_DOUBLE(motion.z)
+    ZEND_PARSE_PARAMETERS_END();
+    if (delay < INT32_MIN || delay > INT32_MAX) {
+        zend_argument_value_error(6, "must fit in a signed 32-bit integer");
+        RETURN_THROWS();
+    }
+    FalconItem *created = item_from_array(item);
+    if (created == NULL)
+        RETURN_LONG(0);
+
+    FalconLevel *target = HANDLE(FalconLevel, level);
+    FalconVec3 position = {x, y, z};
+    FalconEntity *entity = NULL;
+    if (FALCON_HAS(levelSpawnItem)) {
+        entity = falcon->levelSpawnItem(target, position, created, ZEND_NUM_ARGS() > 6 ? &motion : NULL,
+                                        (int32_t) delay);
+    } else {
+        falcon->levelDropItem(target, position, created);
+    }
+    falcon->itemDestroy(created);
+    RETURN_LONG(TO_LONG(entity));
+}
+
+PHP_FUNCTION(falcon_item_entity_item) {
+    ARGUMENTS_1(entity);
+    if (!FALCON_HAS(itemEntityItem))
+        RETURN_NULL();
+    return_owned_item(return_value, falcon->itemEntityItem(HANDLE(FalconEntity, entity)));
+}
+
+PHP_FUNCTION(falcon_item_entity_pickup_delay) {
+    ARGUMENTS_1(entity);
+    if (!FALCON_HAS(itemEntityPickupDelay))
+        RETURN_NULL();
+    RETURN_LONG(falcon->itemEntityPickupDelay(HANDLE(FalconEntity, entity)));
+}
+
+PHP_FUNCTION(falcon_item_entity_set_pickup_delay) {
+    zend_long entity, delay;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(entity)
+        Z_PARAM_LONG(delay)
+    ZEND_PARSE_PARAMETERS_END();
+    if (delay < INT32_MIN || delay > INT32_MAX) {
+        zend_argument_value_error(2, "must fit in a signed 32-bit integer");
+        RETURN_THROWS();
+    }
+    if (FALCON_HAS(itemEntitySetPickupDelay))
+        falcon->itemEntitySetPickupDelay(HANDLE(FalconEntity, entity), (int32_t) delay);
 }
 
 // --- items ---
@@ -326,8 +439,8 @@ PHP_FUNCTION(falcon_player_set_inventory_item) {
         Z_PARAM_LONG(slot)
         Z_PARAM_ARRAY_HT(item)
     ZEND_PARSE_PARAMETERS_END();
-    FalconItem *created = item_from_array(item);
-    if (created == NULL)
+    FalconItem *created;
+    if (!slot_item_from_array(item, &created))
         RETURN_FALSE;
     falcon->playerSetInventoryItem(HANDLE(FalconPlayer, player), (uint32_t) slot, created);
     falcon->itemDestroy(created);
@@ -426,6 +539,28 @@ PHP_FUNCTION(falcon_entity_teleport) {
     falcon->entityTeleport(HANDLE(FalconEntity, entity), HANDLE(FalconLevel, level), (FalconVec3){x, y, z});
 }
 
+PHP_FUNCTION(falcon_entity_teleport_with_rotation) {
+    zend_long entity, level;
+    double x, y, z, yaw, pitch;
+    ZEND_PARSE_PARAMETERS_START(7, 7)
+        Z_PARAM_LONG(entity)
+        Z_PARAM_LONG(level)
+        Z_PARAM_DOUBLE(x)
+        Z_PARAM_DOUBLE(y)
+        Z_PARAM_DOUBLE(z)
+        Z_PARAM_DOUBLE(yaw)
+        Z_PARAM_DOUBLE(pitch)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_ENTITY_TELEPORT_DETAILS
+    if (FALCON_HAS(entityTeleportWithRotation)) {
+        const FalconVec3 rotation = {pitch, yaw, yaw};
+        RETURN_BOOL(falcon->entityTeleportWithRotation(HANDLE(FalconEntity, entity), HANDLE(FalconLevel, level),
+            (FalconVec3){x, y, z}, &rotation) != 0);
+    }
+#endif
+    RETURN_NULL();
+}
+
 PHP_FUNCTION(falcon_entity_set_motion) {
     zend_long entity;
     double x, y, z;
@@ -497,6 +632,19 @@ PHP_FUNCTION(falcon_event_attacker) {
 PHP_FUNCTION(falcon_event_level) {
     ARGUMENTS_1(event);
     RETURN_LONG(TO_LONG(falcon->eventLevel(HANDLE(FalconEvent, event))));
+}
+
+PHP_FUNCTION(falcon_event_set_teleport_level) {
+    zend_long event, level;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(event)
+        Z_PARAM_LONG(level)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_ENTITY_TELEPORT_DETAILS
+    if (FALCON_HAS(eventSetTeleportLevel))
+        RETURN_BOOL(falcon->eventSetTeleportLevel(HANDLE(FalconEvent, event), HANDLE(FalconLevel, level)) != 0);
+#endif
+    RETURN_FALSE;
 }
 
 // [x, y, z, face, block name]
@@ -666,8 +814,8 @@ PHP_FUNCTION(falcon_player_armor_item) {
 
 PHP_FUNCTION(falcon_player_set_armor_item) {
     SLOT_ITEM_ARGUMENTS(player, slot, item);
-    FalconItem *created = item_from_array(item);
-    if (created == NULL)
+    FalconItem *created;
+    if (!slot_item_from_array(item, &created))
         RETURN_FALSE;
     falcon->playerSetArmorItem(HANDLE(FalconPlayer, player), (FalconArmorSlot) slot, created);
     falcon->itemDestroy(created);
@@ -686,8 +834,8 @@ PHP_FUNCTION(falcon_player_set_offhand_item) {
         Z_PARAM_LONG(player)
         Z_PARAM_ARRAY_HT(item)
     ZEND_PARSE_PARAMETERS_END();
-    FalconItem *created = item_from_array(item);
-    if (created == NULL)
+    FalconItem *created;
+    if (!slot_item_from_array(item, &created))
         RETURN_FALSE;
     falcon->playerSetOffhandItem(HANDLE(FalconPlayer, player), created);
     falcon->itemDestroy(created);
@@ -706,8 +854,8 @@ PHP_FUNCTION(falcon_player_ender_item) {
 
 PHP_FUNCTION(falcon_player_set_ender_item) {
     SLOT_ITEM_ARGUMENTS(player, slot, item);
-    FalconItem *created = item_from_array(item);
-    if (created == NULL)
+    FalconItem *created;
+    if (!slot_item_from_array(item, &created))
         RETURN_FALSE;
     const int set = falcon->playerSetEnderChestItem(HANDLE(FalconPlayer, player), (uint32_t) slot, created);
     falcon->itemDestroy(created);
@@ -743,8 +891,8 @@ PHP_FUNCTION(falcon_level_set_container_item) {
         Z_PARAM_LONG(slot)
         Z_PARAM_ARRAY_HT(item)
     ZEND_PARSE_PARAMETERS_END();
-    FalconItem *created = item_from_array(item);
-    if (created == NULL)
+    FalconItem *created;
+    if (!slot_item_from_array(item, &created))
         RETURN_FALSE;
     const int set = falcon->levelSetContainerItem(HANDLE(FalconLevel, level), BLOCK_POS(x, y, z), (uint32_t) slot, created);
     falcon->itemDestroy(created);
@@ -821,8 +969,8 @@ PHP_FUNCTION(falcon_player_set_window_item) {
     ZEND_PARSE_PARAMETERS_END();
     if (!FALCON_HAS(playerSetWindowItem))
         RETURN_FALSE;
-    FalconItem *created = item_from_array(item);
-    if (created == NULL)
+    FalconItem *created;
+    if (!slot_item_from_array(item, &created))
         RETURN_FALSE;
     const int set = falcon->playerSetWindowItem(HANDLE(FalconPlayer, player), (uint32_t) window, (uint32_t) slot, created);
     falcon->itemDestroy(created);
@@ -859,6 +1007,8 @@ ZEND_END_ARG_INFO()
 
 const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_worlds)
+    ENTRY(falcon_world_load)
+    ENTRY(falcon_world_unload)
     ENTRY(falcon_default_world)
     ENTRY(falcon_server_version)
     ENTRY(falcon_level_dimension)
@@ -873,8 +1023,13 @@ const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_level_set_spawn)
     ENTRY(falcon_level_entities)
     ENTRY(falcon_level_is_chunk_loaded)
+    ENTRY(falcon_level_load_chunk)
     ENTRY(falcon_level_highest_block)
     ENTRY(falcon_level_drop_item)
+    ENTRY(falcon_level_spawn_item)
+    ENTRY(falcon_item_entity_item)
+    ENTRY(falcon_item_entity_pickup_delay)
+    ENTRY(falcon_item_entity_set_pickup_delay)
     ENTRY(falcon_item_exists)
     ENTRY(falcon_item_normalise)
     ENTRY(falcon_player_inventory_size)
@@ -888,6 +1043,7 @@ const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_entity_runtime_id)
     ENTRY(falcon_entity_info)
     ENTRY(falcon_entity_teleport)
+    ENTRY(falcon_entity_teleport_with_rotation)
     ENTRY(falcon_entity_set_motion)
     ENTRY(falcon_entity_set_health)
     ENTRY(falcon_entity_set_name_tag)
@@ -897,6 +1053,7 @@ const zend_function_entry falcon_world_functions[] = {
     ENTRY(falcon_event_entity)
     ENTRY(falcon_event_attacker)
     ENTRY(falcon_event_level)
+    ENTRY(falcon_event_set_teleport_level)
     ENTRY(falcon_event_block)
     ENTRY(falcon_event_amount)
     ENTRY(falcon_event_set_amount)

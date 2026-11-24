@@ -26,14 +26,29 @@ class ItemEntity extends Entity{
     }
 
     public function getItem() : Item{
+        $handle = $this->getEntityHandle();
+        if($handle !== 0 && function_exists('falcon_item_entity_item')){
+            $item = falcon_item_entity_item($handle);
+            if($item !== null){
+                return Item::fromFalcon($item);
+            }
+        }
         return clone ($this->item ?? VanillaItems::AIR());
     }
 
     public function getPickupDelay() : int{
+        $handle = $this->getEntityHandle();
+        if($handle !== 0 && function_exists('falcon_item_entity_pickup_delay')){
+            return falcon_item_entity_pickup_delay($handle) ?? $this->pickupDelay;
+        }
         return $this->pickupDelay;
     }
 
     public function setPickupDelay(int $delay) : void{
+        $handle = $this->getEntityHandle();
+        if($handle !== 0 && function_exists('falcon_item_entity_set_pickup_delay')){
+            falcon_item_entity_set_pickup_delay($handle, $delay);
+        }
         $this->pickupDelay = $delay;
     }
 

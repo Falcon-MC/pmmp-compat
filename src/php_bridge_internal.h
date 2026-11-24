@@ -43,3 +43,7 @@ extern const zend_function_entry falcon_server_functions[];
 
 // the entities PocketMine-MP plugins define, which PHP draws for clients
 extern const zend_function_entry falcon_entity_functions[];
+
+// services run on the interpreter thread and are removed before it shuts down
+extern const zend_function_entry falcon_service_functions[];
+void pmmp_php_clear_services(void);

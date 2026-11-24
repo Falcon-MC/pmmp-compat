@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace pocketmine\plugin;
 
 use pmmpcompat\Log;
+use pmmpcompat\PluginServices;
 use pocketmine\event\Cancellable;
 use pocketmine\event\Event;
 use pocketmine\event\EventPriority;
@@ -403,6 +404,7 @@ class PluginManager{
         }
 
         if(!$plugin->isEnabled()){
+            PluginServices::removeOwned($plugin);
             Log::critical("Could not enable plugin '$name': Plugin disabled itself when attempting to enable it");
             return false;
         }
@@ -478,6 +480,7 @@ class PluginManager{
             Log::critical("Error while disabling plugin '$name': " . $e->getMessage());
             Log::exception($e);
         }
+        PluginServices::removeOwned($plugin);
         $plugin->getScheduler()->shutdown();
         HandlerListManager::global()->unregisterAll($plugin);
     }
@@ -496,6 +499,7 @@ class PluginManager{
     private function forget(Plugin $plugin) : void{
         $name = $plugin->getDescription()->getName();
         unset($this->plugins[$name], $this->enabledPlugins[$name]);
+        PluginServices::removeOwned($plugin);
         HandlerListManager::global()->unregisterAll($plugin);
         $plugin->getScheduler()->shutdown();
         foreach($this->pluginDependents as $dependency => $dependents){

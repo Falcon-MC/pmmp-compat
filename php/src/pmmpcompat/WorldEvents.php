@@ -155,8 +155,11 @@ final class WorldEvents{
                 if($player === null || $item === null){
                     return null;
                 }
-                $origin = new ItemEntity(0);
-                $origin->setItemFromFalcon($item);
+                $origin = self::entity($handle);
+                if(!$origin instanceof ItemEntity){
+                    $origin = new ItemEntity(0);
+                    $origin->setItemFromFalcon($item);
+                }
                 return ['event' => new EntityItemPickupEvent($player, $origin, $item, $player->getInventory())];
             case self::PLAYER_INTERACT_ENTITY:
                 $entity = self::entity($handle);
@@ -226,7 +229,7 @@ final class WorldEvents{
             case self::BLOCK_SPREAD:
             case self::BLOCK_FORM:
             case self::BLOCK_FADE:
-                return self::blockChange($type, $handle);
+                return self::blockChange($type, $handle, $player);
             case self::LEAVES_DECAY:
                 $block = self::block($handle);
                 return $block === null ? null : ['event' => new LeavesDecayEvent($block)];
@@ -337,12 +340,17 @@ final class WorldEvents{
                 falcon_event_set_result($handle, $result);
                 $state['result'] = $result;
             }
+        }elseif($last && $event instanceof ProjectileLaunchEvent && $event->getEntity()->isDrawnByPlugin()){
+            $projectile = $event->getEntity();
+            if($event->isCancelled()){
+                $projectile->flagForDespawn();
+            }else{
+                $projectile->spawnToAll();
+            }
         }elseif($last && $event instanceof ChunkLoadEvent){
             $event->getWorld()->notifyChunkListeners($event->getChunkX(), $event->getChunkZ(), $event->getChunk(), true);
         }elseif($last && $event instanceof ChunkUnloadEvent && !$event->isCancelled()){
             $event->getWorld()->notifyChunkListeners($event->getChunkX(), $event->getChunkZ(), $event->getChunk(), false);
-        }elseif($event instanceof WorldUnloadEvent && $last && !$event->isCancelled()){
-            $state['world']->onUnload();
         }
     }
 
@@ -364,18 +372,21 @@ final class WorldEvents{
         return ['event' => $event, 'blocks' => $positions];
     }
 
-    private static function blockChange(int $type, int $handle) : ?array{
+    private static function blockChange(int $type, int $handle, ?Player $player) : ?array{
         $block = self::block($handle);
         if($block === null){
             return null;
         }
         [$x, $y, $z, , $name] = falcon_event_block($handle);
         $world = $block->getPosition()->getWorld();
-        $newState = Block::fromFalcon($name, "{}")->withPosition($world, $x, $y, $z);
+        $payload = falcon_event_data($handle);
+        $data = $payload === '' ? [] : json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
+        $states = json_encode((object) ($data['states'] ?? []), JSON_THROW_ON_ERROR);
+        $newState = Block::fromFalcon($name, $states)->withPosition($world, $x, $y, $z);
         [$fromX, $fromY, $fromZ] = falcon_event_from($handle);
         $source = $world->getBlockAt((int) floor($fromX), (int) floor($fromY), (int) floor($fromZ));
         $event = match($type){
-            self::BLOCK_GROW => new BlockGrowEvent($block, $newState),
+            self::BLOCK_GROW => new BlockGrowEvent($block, $newState, $player),
             self::BLOCK_SPREAD => new BlockSpreadEvent($block, $source, $newState),
             self::BLOCK_FORM => new BlockFormEvent($block, $newState, $source),
             default => new BlockMeltEvent($block, $newState),

@@ -5,11 +5,20 @@ declare(strict_types=1);
 namespace pocketmine\entity\projectile;
 
 use pocketmine\entity\Entity;
+use pocketmine\entity\Location;
+use pocketmine\nbt\tag\CompoundTag;
 
 /** One of Falcon's projectiles: an arrow, a snowball, a trident... Falcon moves it and makes it hit */
 abstract class Projectile extends Entity{
     protected ?int $ownerId = null;
     protected float $damage = 0.0;
+
+    public function __construct(Location|int $location, Entity|CompoundTag|null $shootingEntity = null, ?CompoundTag $nbt = null){
+        parent::__construct($location, $shootingEntity instanceof CompoundTag ? $shootingEntity : $nbt);
+        if($shootingEntity instanceof Entity){
+            $this->setOwningEntity($shootingEntity);
+        }
+    }
 
     /** @internal who shot it, as Falcon's launch event tells */
     public function setOwnerFromFalcon(?Entity $owner) : void{
@@ -21,7 +30,7 @@ abstract class Projectile extends Entity{
     }
 
     public function getOwningEntity() : ?Entity{
-        return $this->ownerId === null ? null : $this->getServer()->getWorldManager()->findEntity($this->ownerId);
+        return $this->ownerId === null ? null : $this->server->getWorldManager()->findEntity($this->ownerId);
     }
 
     public function setOwningEntity(?Entity $owner) : void{

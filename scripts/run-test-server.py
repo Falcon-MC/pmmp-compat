@@ -8,7 +8,12 @@ import subprocess
 import time
 
 
-def run(server, directory, log, seconds, commands):
+def run(server, directory, log, seconds, commands, client=None, client_port=None):
+    environment = dict(os.environ)
+    if client is None:
+        environment["PMMP_COMPAT_SELFTEST"] = "1"
+    else:
+        environment.pop("PMMP_COMPAT_SELFTEST", None)
     with log.open("wb") as output:
         with subprocess.Popen(
             [str(server), "--no-wizard"],
@@ -16,7 +21,7 @@ def run(server, directory, log, seconds, commands):
             stdin=subprocess.PIPE,
             stdout=output,
             stderr=subprocess.STDOUT,
-            env={**os.environ, "PMMP_COMPAT_SELFTEST": "1"},
+            env=environment,
             text=True,
         ) as process:
             try:
@@ -32,12 +37,15 @@ def run(server, directory, log, seconds, commands):
                         if b"Server started." not in tail:
                             time.sleep(0.1)
 
-                try:
-                    process.wait(timeout=seconds)
-                except subprocess.TimeoutExpired:
-                    pass
+                if client is not None:
+                    subprocess.run([str(client), str(client_port)], cwd=directory, check=True, timeout=seconds)
                 else:
-                    raise RuntimeError(f"Server exited before stop ({process.returncode})")
+                    try:
+                        process.wait(timeout=seconds)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    else:
+                        raise RuntimeError(f"Server exited before stop ({process.returncode})")
 
                 # Falcon polls stdin between reads, so write each command separately.
                 for command in commands:
@@ -62,8 +70,13 @@ if __name__ == "__main__":
     parser.add_argument("log", type=Path)
     parser.add_argument("--seconds", type=float, default=7)
     parser.add_argument("--command", action="append", default=[])
+    parser.add_argument("--client", type=Path)
+    parser.add_argument("--client-port", type=int)
     args = parser.parse_args()
+    if (args.client is None) != (args.client_port is None):
+        parser.error("--client and --client-port must be used together")
     try:
-        run(args.server.resolve(), args.directory, args.log, args.seconds, args.command)
-    except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+        run(args.server.resolve(), args.directory, args.log, args.seconds, args.command,
+            args.client.resolve() if args.client is not None else None, args.client_port)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
         parser.exit(1, f"{error}. See {args.log}\n")

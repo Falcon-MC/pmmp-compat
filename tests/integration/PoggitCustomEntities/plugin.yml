@@ -1,0 +1,12 @@
+name: PoggitCustomEntities
+main: compatpoggitentities\Main
+version: 1.0.0
+api: 5.0.0
+depend: [HumanNPC, MiniBosses, BlockPets]
+commands:
+  entityfixtureclick:
+    description: Record the NPC click command
+    permission: compatpoggitentities.click
+permissions:
+  compatpoggitentities.click:
+    default: true

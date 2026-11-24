@@ -81,6 +81,7 @@ existing `config.yml` files can be copied over.
 
 See the [migration guide](docs/migration.md) for staging, data folders and the offline compatibility report.
 The [Poggit survey](docs/poggit-survey.md) documents class and feature usage and how to reproduce the ranking.
+See [plugin services](docs/plugin-services.md) for calls between PHP plugins and native Falcon plugins.
 
 ### GameSpy Query
 

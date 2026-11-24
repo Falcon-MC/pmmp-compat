@@ -46,6 +46,7 @@ use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\block\BlockPlaceEvent;
 use pocketmine\event\block\SignChangeEvent;
 use pocketmine\event\entity\EntityDamageByBlockEvent;
+use pocketmine\event\entity\EntityDamageByChildEntityEvent;
 use pocketmine\event\entity\EntityDamageByEntityEvent;
 use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\entity\EntityDeathEvent;
@@ -124,7 +125,8 @@ final class Bridge{
         self::BLOCK_BREAK => [BlockBreakEvent::class],
         self::BLOCK_PLACE => [BlockPlaceEvent::class],
         self::PLAYER_INTERACT_BLOCK => [PlayerInteractEvent::class],
-        self::ENTITY_DAMAGE => [EntityDamageEvent::class, EntityDamageByEntityEvent::class, EntityDamageByBlockEvent::class],
+        self::ENTITY_DAMAGE => [EntityDamageEvent::class, EntityDamageByEntityEvent::class,
+            EntityDamageByBlockEvent::class, EntityDamageByChildEntityEvent::class],
         self::ENTITY_DEATH => [EntityDeathEvent::class],
         self::PLAYER_DEATH => [PlayerDeathEvent::class],
         self::PLAYER_RESPAWN => [PlayerRespawnEvent::class],
@@ -180,6 +182,7 @@ final class Bridge{
     /** @internal an entity a plugin made exists: hits on it have to reach its attack() */
     public static function listenForDrawnEntities() : void{
         self::listenTo(self::ENTITY_DAMAGE);
+        self::listenTo(WorldEvents::PROJECTILE_LAUNCH);
     }
 
     /** @internal a player clicked an entity a plugin made */
@@ -233,6 +236,10 @@ final class Bridge{
                 return;
             }
             if($priority === EventPriority::LOWEST){
+                if($type === WorldEvents::WORLD_LOAD){
+                    Server::getInstance()->getWorldManager()->refresh();
+                    \pmmpcompat\world\WorldGeneration::load(falcon_event_world_name($handle));
+                }
                 $event = self::create($type, $handle);
                 if($event === null){
                     return;
@@ -277,6 +284,9 @@ final class Bridge{
                 $player = Players::get(falcon_event_player($handle));
                 $player->spawned = true;
                 PlayerHistory::recordJoin($player);
+                foreach($server->getOnlinePlayers() as $viewer){
+                    $viewer->syncJoinVisibility($player);
+                }
                 return ['event' => new PlayerJoinEvent($player, $message), 'message' => $message, 'recipients' => [],
                     'sender' => null];
             case self::PLAYER_QUIT:
@@ -310,7 +320,10 @@ final class Bridge{
                 }
                 return self::state(new PlayerGameModeChangeEvent(Players::get(falcon_event_player($handle)), $gameMode), $message, $handle);
             case self::PLAYER_TOGGLE_SNEAK:
-                return self::state(new PlayerToggleSneakEvent(Players::get(falcon_event_player($handle)), falcon_event_state($handle)), $message, $handle);
+                $sneaking = falcon_event_state($handle);
+                $pressed = (int) falcon_event_amount($handle);
+                return self::state(new PlayerToggleSneakEvent(Players::get(falcon_event_player($handle)), $sneaking,
+                    $pressed === 0 ? $sneaking : $pressed > 0), $message, $handle);
             case self::PLAYER_TOGGLE_SPRINT:
                 return self::state(new PlayerToggleSprintEvent(Players::get(falcon_event_player($handle)), falcon_event_state($handle)), $message, $handle);
             case self::PLAYER_TOGGLE_FLIGHT:
@@ -352,7 +365,7 @@ final class Bridge{
                 [$toX, $toY, $toZ] = falcon_event_to($handle);
                 $event = new EntityTeleportEvent($entity, new Position($x, $y, $z, $entity->getWorld()),
                     new Position($toX, $toY, $toZ, $world));
-                return self::state($event, $message, $handle) + ['to' => [$toX, $toY, $toZ]];
+                return self::state($event, $message, $handle) + ['to' => [$toX, $toY, $toZ], 'level' => $world->getHandle()];
             case self::ENTITY_DAMAGE:
                 $entity = self::eventEntity($handle);
                 if($entity === null){
@@ -361,14 +374,24 @@ final class Bridge{
                 $cause = DamageCauses::fromFalcon(falcon_event_cause($handle));
                 $amount = falcon_event_amount($handle);
                 $attackerHandle = falcon_event_attacker($handle);
+                $directHandle = falcon_event_target($handle);
                 $knockback = falcon_event_knockback($handle);
-                $event = $attackerHandle !== 0
-                    ? new EntityDamageByEntityEvent(Entities::get($attackerHandle), $entity, $cause, $amount, [],
-                        $knockback[0] ?? Living::DEFAULT_KNOCKBACK_FORCE, $knockback[1] ?? Living::DEFAULT_KNOCKBACK_VERTICAL_LIMIT)
-                    : new EntityDamageEvent($entity, $cause, $amount);
-                if($attackerHandle === 0 && ($world = self::eventWorld($handle)) !== null){
+                if($attackerHandle !== 0 && $directHandle !== 0 && $directHandle !== $attackerHandle){
+                    $event = new EntityDamageByChildEntityEvent(Entities::get($attackerHandle), Entities::get($directHandle),
+                        $entity, $cause, $amount);
+                    if($knockback !== null){
+                        $event->setKnockBack($knockback[0]);
+                        $event->setVerticalKnockBackLimit($knockback[1]);
+                    }
+                }elseif($attackerHandle !== 0 || $directHandle !== 0){
+                    $event = new EntityDamageByEntityEvent(Entities::get($attackerHandle ?: $directHandle), $entity, $cause,
+                        $amount, [], $knockback[0] ?? Living::DEFAULT_KNOCKBACK_FORCE,
+                        $knockback[1] ?? Living::DEFAULT_KNOCKBACK_VERTICAL_LIMIT);
+                }elseif(($world = self::eventWorld($handle)) !== null){
                     [$x, $y, $z] = falcon_event_block($handle);
                     $event = new EntityDamageByBlockEvent($world->getBlockAt($x, $y, $z), $entity, $cause, $amount);
+                }else{
+                    $event = new EntityDamageEvent($entity, $cause, $amount);
                 }
                 if($entity->isDrawnByPlugin()){
                     // PHP hurts it, as on PocketMine-MP: its attack() decides, Falcon's stand-in takes nothing
@@ -459,7 +482,7 @@ final class Bridge{
                     $writer = new \pmmp\encoding\ByteBufferWriter();
                     \pmmp\encoding\VarInt::writeUnsignedInt($writer, $packetId);
                     $decode = new DataPacketDecodeEvent($player->getNetworkSession(), $packetId, $writer->getData() . $payload);
-                    $decode->call();
+                    self::callListeners($decode);
                     if($decode->isCancelled()){
                         falcon_event_set_cancelled($handle, true);
                         return null;
@@ -735,6 +758,12 @@ final class Bridge{
             self::applyMessage($handle, $state, $event->getEmoteId());
         }elseif($event instanceof PlayerMoveEvent || $event instanceof EntityTeleportEvent || $event instanceof PlayerRespawnEvent){
             $to = $event instanceof PlayerRespawnEvent ? $event->getRespawnPosition() : $event->getTo();
+            if($event instanceof EntityTeleportEvent && $to->isValid() && function_exists('falcon_event_set_teleport_level')){
+                $level = $to->getWorld()->getHandle();
+                if($level !== $state['level'] && falcon_event_set_teleport_level($handle, $level)){
+                    $state['level'] = $level;
+                }
+            }
             if([$to->x, $to->y, $to->z] !== $state['to']){
                 falcon_event_set_to($handle, $to->x, $to->y, $to->z);
                 $state['to'] = [$to->x, $to->y, $to->z];

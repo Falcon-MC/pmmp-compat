@@ -40,3 +40,12 @@ bash tests/integration/PoggitEconomy/run.sh /path/to/FalconServer /path/to/dist/
 The headless scenario seeds a local wallet for a simulated player. It checks a ChatGames
 reward, a two-level XPShop sale, a RankShopGUI rank purchase, a ChestShop item purchase, and
 a BankGUI deposit. Responses and clicks are supplied at the plugin event handlers.
+
+An optional Bedrock protocol client also verifies that ChestShop opens its category and purchase windows in sequence.
+The client acknowledges the first window's close and observes the chest block actor packets. The fixture injects the clicks
+at the transaction event and verifies the wallet and the purchased diamonds.
+
+```sh
+bash tests/integration/SensitiveCompatibilityEvents/build-client.sh /path/to/Falcon/build /tmp/chest-client tests/integration/PoggitEconomy/chest-client.cpp
+bash tests/integration/PoggitEconomy/run.sh /path/to/FalconServer /path/to/dist/pmmp-compat /path/to/fixtures /tmp/chest-client
+```

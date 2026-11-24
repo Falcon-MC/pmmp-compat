@@ -80,6 +80,10 @@ class Player extends Human implements CommandSender, IPlayer{
     private int $handle;
     /** @var Form[] by Falcon's form id */
     private array $forms = [];
+    /** @var array<string, true> by target UUID bytes */
+    private array $hiddenPlayers = [];
+    /** @var array<string, true> Visibility cleared while the target was offline. */
+    private array $showOnJoin = [];
 
     /** @internal the runtime makes one for each of Falcon's players */
     public function __construct(
@@ -133,6 +137,8 @@ class Player extends Human implements CommandSender, IPlayer{
                 $this->offlineLocation = $location;
             }
             $this->offlineGameMode = $this->getGamemode();
+            $this->flying = $this->isFlying();
+            $this->allowFlight = $this->getAllowFlight();
         }else{
             $this->online = false;
         }
@@ -143,6 +149,8 @@ class Player extends Human implements CommandSender, IPlayer{
         $this->online = false;
         $this->spawned = false;
         $this->forms = [];
+        $this->hiddenPlayers = [];
+        $this->showOnJoin = [];
     }
 
     /** @internal the Falcon handle while online */
@@ -154,6 +162,91 @@ class Player extends Human implements CommandSender, IPlayer{
     public function getEntityHandle() : int{
         return $this->online ? falcon_player_entity($this->handle) : 0;
     }
+
+    public function canSee(Player $player) : bool{
+        return !isset($this->hiddenPlayers[$player->getUniqueId()->getBytes()]);
+    }
+
+    public function hidePlayer(Player $player) : void{
+        if($player === $this){
+            return;
+        }
+        $uuid = $player->getUniqueId()->getBytes();
+        $this->hiddenPlayers[$uuid] = true;
+        unset($this->showOnJoin[$uuid]);
+        if($this->isOnline() && $player->isOnline()){
+            falcon_player_set_visible_to($player->handle, $this->handle, false);
+        }
+    }
+
+    public function showPlayer(Player $player) : void{
+        if($player === $this){
+            return;
+        }
+        $uuid = $player->getUniqueId()->getBytes();
+        $wasHidden = isset($this->hiddenPlayers[$uuid]);
+        unset($this->hiddenPlayers[$uuid]);
+        if($this->isOnline() && $player->isOnline()){
+            falcon_player_set_visible_to($player->handle, $this->handle, true);
+        }elseif($wasHidden){
+            $this->showOnJoin[$uuid] = true;
+        }
+    }
+
+    /** @internal Reapply visibility decided while the target was offline. */
+    public function syncJoinVisibility(Player $player) : void{
+        $uuid = $player->getUniqueId()->getBytes();
+        if(isset($this->hiddenPlayers[$uuid])){
+            falcon_player_set_visible_to($player->handle, $this->handle, false);
+        }elseif(isset($this->showOnJoin[$uuid])){
+            falcon_player_set_visible_to($player->handle, $this->handle, true);
+            unset($this->showOnJoin[$uuid]);
+        }
+    }
+
+    public function spawnTo(Player $player) : void{
+        if($player !== $this && $this->isOnline() && $player->isOnline() && $player->canSee($this)
+            && $this->isAlive() && $player->isAlive() && !$this->isSpectator()){
+            falcon_player_spawn_to($this->handle, $player->handle);
+        }
+    }
+
+    public function despawnFrom(Player $player, bool $send = true) : void{
+        if($player !== $this && $this->isOnline() && $player->isOnline()){
+            falcon_player_despawn_from($this->handle, $player->handle, $send);
+        }
+    }
+
+    public function spawnToAll() : void{
+        if($this->isOnline()){
+            foreach($this->getWorld()->getViewersForPosition($this->getPosition()) as $viewer){
+                $this->spawnTo($viewer);
+            }
+        }
+    }
+
+    public function despawnFromAll() : void{
+        foreach($this->getViewers() as $viewer){
+            $this->despawnFrom($viewer);
+        }
+    }
+
+    public function respawnToAll() : void{
+        foreach($this->getViewers() as $viewer){
+            $this->despawnFrom($viewer);
+            $this->spawnTo($viewer);
+        }
+    }
+
+    /** @return Player[] */
+    public function getViewers() : array{
+        if(!$this->isOnline()){
+            return [];
+        }
+        return array_filter(parent::getViewers(), fn(Player $viewer) => $viewer !== $this && $viewer->canSee($this)
+            && falcon_player_is_spawned_to($this->handle, $viewer->handle));
+    }
+
 
     public function getInventory() : PlayerInventory{
         return $this->inventory;
@@ -226,6 +319,10 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     /** whether the client holds that chunk of the player's world, so entities in it can be shown */
+    /** @internal Falcon streams requested and changed columns continuously. */
+    public function doChunkRequests() : void{
+    }
+
     public function hasReceivedChunk(int $chunkX, int $chunkZ) : bool{
         return $this->online && falcon_player_has_chunk($this->handle, $chunkX, $chunkZ);
     }
@@ -418,8 +515,8 @@ class Player extends Human implements CommandSender, IPlayer{
 
     protected bool $sneaking = false;
     protected bool $sprinting = false;
-    private bool $flying = false;
-    private bool $allowFlight = false;
+    private ?bool $flying = null;
+    private ?bool $allowFlight = null;
     private int $viewDistance = 8;
 
     /** @internal what the player toggled, once no listener refused it */
@@ -456,19 +553,37 @@ class Player extends Human implements CommandSender, IPlayer{
     }
 
     public function isFlying() : bool{
-        return $this->flying || $this->isSpectator();
+        if($this->online && function_exists('falcon_player_is_flying')){
+            $flying = falcon_player_is_flying($this->handle);
+            if($flying !== null){
+                return $flying;
+            }
+        }
+        return $this->flying ?? $this->isSpectator();
     }
 
     public function setFlying(bool $flying) : void{
         $this->flying = $flying;
+        if($this->online && function_exists('falcon_player_set_flying')){
+            falcon_player_set_flying($this->handle, $flying);
+        }
     }
 
     public function getAllowFlight() : bool{
-        return $this->allowFlight || $this->isCreative() || $this->isSpectator();
+        if($this->online && function_exists('falcon_player_allow_flight')){
+            $allowed = falcon_player_allow_flight($this->handle);
+            if($allowed !== null){
+                return $allowed;
+            }
+        }
+        return $this->allowFlight ?? ($this->isCreative() || $this->isSpectator());
     }
 
     public function setAllowFlight(bool $value) : void{
         $this->allowFlight = $value;
+        if($this->online && function_exists('falcon_player_set_allow_flight')){
+            falcon_player_set_allow_flight($this->handle, $value);
+        }
     }
 
     public function hasAutoJump() : bool{

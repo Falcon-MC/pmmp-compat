@@ -225,8 +225,12 @@ final class Entities{
                 }
                 $handle = falcon_server_entity($id);
                 if($handle === 0 && falcon_drawn_entities_supported()){
-                    // Falcon let go of the stand-in, its chunk unloaded: what was saved comes back with the chunk
-                    self::forgetDrawn($entity);
+                    if($entity->isFlaggedForDespawn()){
+                        $entity->close();
+                    }else{
+                        // The saved entity comes back once Falcon loads its chunk again.
+                        self::forgetDrawn($entity);
+                    }
                     continue;
                 }
                 if(isset(self::$updating[$id]) && !$entity->onUpdate($currentTick)){

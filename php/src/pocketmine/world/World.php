@@ -14,6 +14,7 @@ use pocketmine\block\tile\TileFactory;
 use pocketmine\math\AxisAlignedBB;
 use pocketmine\block\VanillaBlocks;
 use pocketmine\entity\Entity;
+use pocketmine\entity\object\ItemEntity;
 use pocketmine\event\world\ChunkPopulateEvent;
 use pocketmine\event\world\WorldDisplayNameChangeEvent;
 use pocketmine\event\world\WorldParticleEvent;
@@ -22,6 +23,7 @@ use pocketmine\item\Item;
 use pocketmine\math\Vector3;
 use pocketmine\player\Player;
 use pocketmine\utils\ReversePriorityQueue;
+use pocketmine\utils\Utils;
 use pocketmine\network\mcpe\NetworkBroadcastUtils;
 use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\network\mcpe\protocol\BlockActorDataPacket;
@@ -207,7 +209,18 @@ class World implements ChunkManager{
     }
 
     public function loadChunk(int $chunkX, int $chunkZ) : ?Chunk{
+        if(!$this->isLoaded()){
+            return null;
+        }
+        if(!$this->isChunkLoaded($chunkX, $chunkZ)){
+            falcon_level_load_chunk($this->level, $chunkX, $chunkZ);
+        }
         return $this->getChunk($chunkX, $chunkZ);
+    }
+
+    /** @return Player[] Viewers to whom Falcon has sent this column. */
+    public function getChunkPlayers(int $chunkX, int $chunkZ) : array{
+        return array_filter($this->getPlayers(), static fn(Player $player) => $player->hasReceivedChunk($chunkX, $chunkZ));
     }
 
     /** how far around each player chunks are looked for: Falcon does not list the ones it holds */
@@ -501,7 +514,11 @@ class World implements ChunkManager{
     }
 
     public function setChunk(int $chunkX, int $chunkZ, Chunk $chunk) : void{
-        throw new \LogicException("Falcon keeps this world's chunks: setChunk() is not available");
+        if($chunk instanceof FalconChunk && $chunk->isViewOf($this, $chunkX, $chunkZ)){
+            // Block mutations on a live chunk have already reached Falcon and its viewers.
+            return;
+        }
+        throw new \LogicException("Falcon cannot replace a live chunk with a detached chunk");
     }
 
     public function isChunkLoaded(int $chunkX, int $chunkZ) : bool{
@@ -566,16 +583,23 @@ class World implements ChunkManager{
         return $entity !== null && $entity->getWorld() === $this ? $entity : null;
     }
 
-    /**
-     * Drops an item as a player would; Falcon gives the item entity its own motion and pickup delay.
-     *
-     * @return null the item entity is Falcon's, no PocketMine-MP object stands for it
-     */
-    public function dropItem(Vector3 $source, Item $item, ?Vector3 $motion = null, int $delay = 10) : mixed{
-        if(!$item->isNull()){
-            falcon_level_drop_item($this->level, $source->x, $source->y, $source->z, $item->toFalcon());
+    public function dropItem(Vector3 $source, Item $item, ?Vector3 $motion = null, int $delay = 10) : ?ItemEntity{
+        if($item->isNull()){
+            return null;
         }
-        return null;
+        Utils::checkVector3NotInfOrNaN($source);
+        $motionComponents = [];
+        if($motion !== null){
+            Utils::checkVector3NotInfOrNaN($motion);
+            $motionComponents = [$motion->x, $motion->y, $motion->z];
+        }
+        if(!function_exists('falcon_level_spawn_item')){
+            falcon_level_drop_item($this->level, $source->x, $source->y, $source->z, $item->toFalcon());
+            return null;
+        }
+        $handle = falcon_level_spawn_item($this->level, $source->x, $source->y, $source->z, $item->toFalcon(), $delay,
+            ...$motionComponents);
+        return $handle === 0 ? null : Entities::get($handle);
     }
 
     /** how far a sound or a particle carries: the players who would have the chunk loaded */

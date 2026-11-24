@@ -333,7 +333,7 @@ class Item implements \JsonSerializable{
 
     /** the NBT, the name and lore written into its display tag */
     public function getNamedTag() : CompoundTag{
-        $tag = clone $this->nbt;
+        $tag = $this->nbt;
         $display = $tag->getCompoundTag(self::TAG_DISPLAY) ?? new CompoundTag();
         if($this->customName !== ""){
             $display->setString(self::TAG_DISPLAY_NAME, $this->customName);

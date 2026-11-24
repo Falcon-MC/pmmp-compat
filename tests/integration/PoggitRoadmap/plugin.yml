@@ -1,0 +1,12 @@
+name: PoggitRoadmap
+main: roadmapfixture\Main
+version: 1.0.0
+api: 5.0.0
+softdepend: [BuilderTools, CustomShopUI, EconomyAPI, MultiWorld, Worlds, SkyBlock, Slapper, VanishV2, InvSee]
+commands:
+  roadmapclick:
+    description: Records an NPC click.
+    permission: roadmap.click
+permissions:
+  roadmap.click:
+    default: true

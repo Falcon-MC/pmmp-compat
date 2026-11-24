@@ -49,6 +49,7 @@ final class VanillaBlocks{
         "iron" => "iron_block",
         "emerald" => "emerald_block",
         "lapis_lazuli" => "lapis_block",
+        "lapis_lazuli_ore" => "lapis_ore",
         "redstone" => "redstone_block",
         "coal" => "coal_block",
         "netherite" => "netherite_block",

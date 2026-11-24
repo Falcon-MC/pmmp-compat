@@ -424,10 +424,14 @@ final class PlayerCompatibilityEvents{
             if($projectile !== $state['projectile']){
                 falcon_event_set_data($handle, (string) $projectile->getId());
                 if($last && $projectile->isDrawnByPlugin()){
-                    if($event->isCancelled()){
+                    $force = $event->getForce();
+                    if($event->isCancelled() || !is_finite($force) || $force < 0){
                         $projectile->close();
                     }else{
-                        $projectile->spawnToAll();
+                        $projectile->setMotion($projectile->getMotion()->multiply($force));
+                        if(!$projectile instanceof Projectile){
+                            $projectile->spawnToAll();
+                        }
                     }
                 }
             }

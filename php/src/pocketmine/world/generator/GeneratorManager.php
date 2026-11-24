@@ -21,7 +21,7 @@ final class GeneratorManager{
 
     public function __construct(){
         $none = static fn(string $options) => null;
-        foreach(["normal" => \pmmpcompat\world\FalconGenerator::class, "flat" => \pmmpcompat\world\FalconGenerator::class,
+        foreach(["normal" => \pmmpcompat\world\FalconGenerator::class, "flat" => \pmmpcompat\world\FalconFlatGenerator::class,
             "nether" => \pmmpcompat\world\FalconGenerator::class, "the_end" => \pmmpcompat\world\FalconGenerator::class] as $name => $class){
             $this->list[$name] = new GeneratorManagerEntry($class, $none, true);
         }

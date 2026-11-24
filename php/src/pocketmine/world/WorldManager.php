@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace pocketmine\world;
 
+use pmmpcompat\world\WorldGeneration;
+
 /**
  * Falcon's worlds as PocketMine-MP's: Server::getWorldManager().
  *
  * Each of Falcon's levels is a World, the nether and the end named after their world (see World). Falcon loads and
- * generates its worlds itself, so loading one here only finds it.
+ * generates its worlds with a shared native store and optional PHP generator overlays.
  */
 class WorldManager{
     private const DIMENSION_NAMES = [0 => "", 1 => " nether", 2 => " the_end"];
@@ -40,14 +42,25 @@ class WorldManager{
         return $this->displayNames;
     }
 
-    /** @internal what Falcon has now, kept for the worlds already seen */
-    private function refresh() : void{
+    /** @internal Refresh native handles after world load and deferred unload. */
+    public function refresh() : void{
+        $active = [];
         foreach(falcon_worlds() as $worldName => $levels){
             foreach($levels as $dimension => $level){
-                $this->byLevel[$level] ??= new World($worldName . (self::DIMENSION_NAMES[$dimension] ?? " $dimension"),
-                    $dimension, $level);
+                $name = $worldName . (self::DIMENSION_NAMES[$dimension] ?? " $dimension");
+                $world = $this->byLevel[$level] ?? null;
+                if($world === null || $world->getFolderName() !== $name){
+                    $world?->onUnload();
+                    $world = new World($name, $dimension, $level);
+                }
+                $active[$level] = $world;
             }
         }
+        foreach(array_diff_key($this->byLevel, $active) as $world){
+            $world->onUnload();
+            WorldGeneration::forget($world->getFolderName());
+        }
+        $this->byLevel = $active;
     }
 
     /** @internal the World for a Falcon level handle */
@@ -107,16 +120,63 @@ class WorldManager{
     }
 
     public function isWorldGenerated(string $name) : bool{
-        return $this->isWorldLoaded($name);
+        $directory = WorldGeneration::directory($name);
+        return $this->isWorldLoaded($name) || ($directory !== null && is_dir($directory . '/db'));
     }
 
-    /** true when Falcon has the world: it loads its worlds itself */
     public function loadWorld(string $name, bool $autoUpgrade = false) : bool{
-        return $this->isWorldLoaded($name);
+        return $this->isWorldLoaded($name) || (WorldGeneration::directory($name) !== null && falcon_world_load($name, false, ''));
     }
 
-    /** Falcon keeps its worlds loaded: nothing is unloaded */
-    public function unloadWorld(World $world, bool $forceUnload = false) : bool{
+    public function generateWorld(string $name, WorldCreationOptions $options, bool $backgroundGeneration = true) : bool{
+        $directory = WorldGeneration::directory($name);
+        if($directory === null || $this->isWorldGenerated($name) || file_exists($directory) || is_link($directory)){
+            return false;
+        }
+        if(!mkdir($directory, 0777, true)){
+            return false;
+        }
+        try{
+            WorldGeneration::prepare($directory, $name, $options);
+            if(falcon_world_load($name, true, (string) $options->getSeed())){
+                $world = $this->getWorldByName($name);
+                if($world !== null && (!$backgroundGeneration || WorldGeneration::hasCustomGenerator($name))){
+                    $spawn = $world->getSpawnLocation();
+                    $world->loadChunk($spawn->getFloorX() >> 4, $spawn->getFloorZ() >> 4);
+                }
+                return $world !== null;
+            }
+        }catch(\Throwable $error){
+            \pmmpcompat\Log::critical("Could not generate world '$name': " . $error->getMessage());
+        }
+        WorldGeneration::forget($name);
+        if(!is_dir($directory . '/db')){
+            foreach(['level.dat', 'compat-generator.json'] as $file){
+                if(is_file($directory . '/' . $file)){
+                    unlink($directory . '/' . $file);
+                }
+            }
+            rmdir($directory);
+        }
         return false;
+    }
+
+    public function unloadWorld(World $world, bool $forceUnload = false) : bool{
+        $name = $world->getFolderName();
+        if(!$world->isLoaded() || $world === $this->getDefaultWorld() || WorldGeneration::directory($name) === null){
+            return false;
+        }
+        if($forceUnload){
+            $default = $this->getDefaultWorld();
+            if($default === null){
+                return false;
+            }
+            foreach($world->getPlayers() as $player){
+                if(!$player->teleport($default->getSpawnLocation())){
+                    return false;
+                }
+            }
+        }
+        return falcon_world_unload($name);
     }
 }

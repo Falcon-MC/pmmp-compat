@@ -17,6 +17,8 @@ final class StringToItemParser{
 
     /** @var \Closure[] by alias */
     private array $callbackMap = [];
+    /** @var array<string, true>|null Names from the installed Bedrock palette. */
+    private ?array $vanillaAliases = null;
 
     private static function normalise(string $input) : string{
         return strtolower(str_replace([" ", "minecraft:"], ["_", ""], trim($input)));
@@ -92,6 +94,12 @@ final class StringToItemParser{
 
     /** @return string[] */
     public function getKnownAliases() : array{
-        return array_keys($this->callbackMap);
+        if($this->vanillaAliases === null){
+            $this->vanillaAliases = [];
+            foreach(\pocketmine\network\mcpe\convert\TypeConverter::getInstance()->getItemTypeDictionary()->getEntries() as $entry){
+                $this->vanillaAliases[self::normalise($entry->getStringId())] = true;
+            }
+        }
+        return array_map(strval(...), array_keys($this->callbackMap + $this->vanillaAliases));
     }
 }

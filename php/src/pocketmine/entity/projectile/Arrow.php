@@ -4,7 +4,15 @@ declare(strict_types=1);
 
 namespace pocketmine\entity\projectile;
 
+use pocketmine\entity\Entity;
+use pocketmine\entity\Location;
+use pocketmine\nbt\tag\CompoundTag;
+
 class Arrow extends Projectile{
+    public function __construct(Location|int $location, Entity|CompoundTag|null $shootingEntity = null, bool $critical = false, ?CompoundTag $nbt = null){
+        parent::__construct($location, $shootingEntity, $nbt);
+        $this->setCritical($critical);
+    }
     public const PICKUP_NONE = 0;
     public const PICKUP_ANY = 1;
     public const PICKUP_CREATIVE = 2;

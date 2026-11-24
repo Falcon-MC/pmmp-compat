@@ -411,11 +411,11 @@ class Server{
     }
 
     public function getOnlineMode() : bool{
-        return true;
+        return $this->getConfigGroup()->getConfigBool('online-mode', true);
     }
 
     public function requiresAuthentication() : bool{
-        return true;
+        return $this->getOnlineMode();
     }
 
     public function getPort() : int{
@@ -423,7 +423,7 @@ class Server{
     }
 
     public function getPortV6() : int{
-        return 19133;
+        return $this->getConfigGroup()->getConfigInt('server-portv6', 19133);
     }
 
     public function getIp() : string{
@@ -435,7 +435,7 @@ class Server{
     }
 
     public function getViewDistance() : int{
-        return 8;
+        return $this->getConfigGroup()->getConfigInt('view-distance', 32);
     }
 
     public function getAllowedViewDistance(int $distance) : int{
@@ -443,11 +443,12 @@ class Server{
     }
 
     public function getGamemode() : \pocketmine\player\GameMode{
-        return \pocketmine\player\GameMode::SURVIVAL();
+        $name = $this->getConfigGroup()->getConfigString('gamemode', 'survival');
+        return \pocketmine\player\GameMode::fromString($name) ?? \pocketmine\player\GameMode::SURVIVAL;
     }
 
     public function getForceGamemode() : bool{
-        return false;
+        return $this->getConfigGroup()->getConfigBool('force-gamemode', false);
     }
 
     /** one of World's DIFFICULTY_ numbers */

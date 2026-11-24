@@ -10,7 +10,7 @@ include(FetchContent)
 FetchContent_Declare(
     falcon_plugin_api
     GIT_REPOSITORY https://github.com/Falcon-MC/PluginAPI.git
-    GIT_TAG 2152bb8d8260e0fd79d2804f2126b488930bf35f
+    GIT_TAG 5e6bb64cc50d05c8b04f11388c208b98ba91a753
 )
 set(FALCON_PLUGIN_API_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(falcon_plugin_api)
@@ -33,6 +33,7 @@ falcon_add_plugin(PmmpCompat
     src/php_world.c
     src/php_living.c
     src/php_server.c
+    src/php_services.c
     src/php_entity.c
     src/php_watchdog.c
     third_party/ext-encoding/encoding.cpp

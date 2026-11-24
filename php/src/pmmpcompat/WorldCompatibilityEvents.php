@@ -142,6 +142,7 @@ final class WorldCompatibilityEvents{
                     (int) falcon_event_amount($handle))];
             case self::CHUNK_POPULATE:
                 [$x, $z] = falcon_event_chunk($handle);
+                \pmmpcompat\world\WorldGeneration::onChunkPopulated($world, $x, $z);
                 return ['event' => new ChunkPopulateEvent($world, $x, $z, new FalconChunk($world, $x, $z))];
         }
 

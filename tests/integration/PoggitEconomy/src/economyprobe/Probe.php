@@ -15,21 +15,29 @@ use ClickedTran\rankshop\RankShopGUI;
 use cooldogedev\BedrockEconomy\api\BedrockEconomyAPI;
 use muqsit\chestshop\category\CategoryEntry;
 use muqsit\chestshop\category\CategoryPage;
+use muqsit\chestshop\libs\muqsit\invmenu\InvMenuHandler as ChestMenus;
 use muqsit\chestshop\Loader as ChestShop;
 use onebone\economyapi\EconomyAPI;
 use pocketmine\event\Listener;
+use pocketmine\event\inventory\InventoryTransactionEvent;
 use pocketmine\event\player\PlayerJoinEvent;
 use pocketmine\event\player\PlayerLoginEvent;
+use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\inventory\SimpleInventory;
 use pocketmine\inventory\transaction\action\SlotChangeAction;
 use pocketmine\inventory\transaction\InventoryTransaction;
 use pocketmine\item\VanillaItems;
+use pocketmine\network\mcpe\protocol\BlockActorDataPacket;
+use pocketmine\network\mcpe\protocol\ContainerOpenPacket;
 use pocketmine\player\Player;
 use pocketmine\plugin\PluginBase;
 use pocketmine\scheduler\ClosureTask;
 use tobydev27\XPShop\Main as XPShop;
 
 final class Probe extends PluginBase implements Listener{
+    private bool $testingChest = false;
+    private int $chestWindows = 0;
+    private bool $chestBlockActor = false;
     protected function onEnable() : void{
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
     }
@@ -58,7 +66,7 @@ final class Probe extends PluginBase implements Listener{
             $chest = $plugins->getPlugin('ChestShop');
             if($chest !== null){
                 self::require($chest instanceof ChestShop && $chest->isEnabled(), 'ChestShop startup');
-                $this->chest($player, $api);
+                $this->chest($player, $api, $chest);
             }
             $bank = $plugins->getPlugin('BankGUI');
             if($bank !== null){
@@ -130,13 +138,71 @@ final class Probe extends PluginBase implements Listener{
         });
     }
 
-    private function chest(Player $player, EconomyAPI $api) : void{
+    private function chest(Player $player, EconomyAPI $api, ChestShop $plugin) : void{
         $item = VanillaItems::DIAMOND()->setCount(3);
-        $entry = new CategoryEntry($item, 20.0);
-        $purchase = new \ReflectionMethod(CategoryPage::class, 'attemptPurchase');
-        $purchase->invoke(new CategoryPage([$entry]), $player, $entry);
-        self::require((float) $api->myMoney($player) === 80.0 && $player->getInventory()->contains($item), 'ChestShop purchase did not debit wallet and deliver diamonds');
+        if(getenv('PMMP_COMPAT_CHESTSHOP_WIRE') !== '1'){
+            $entry = new CategoryEntry($item, 20.0);
+            (new \ReflectionMethod(CategoryPage::class, 'attemptPurchase'))->invoke(new CategoryPage([$entry]), $player, $entry);
+            $this->verifyChestPurchase($player, $api, $item);
+            return;
+        }
+        if(ChestMenus::getPlayerManager()->getNullable($player) === null){
+            (new PlayerLoginEvent($player, ''))->call();
+        }
+        $this->testingChest = true;
+        $player->setOp(true);
+        $server = $this->getServer();
+        $player->getInventory()->setItemInHand(VanillaItems::PAPER());
+        $server->dispatchCommand($player, 'cs addcategory Fixture');
+        $this->later(function() use ($player, $server, $plugin, $api, $item) : void{
+            self::require($plugin->getChestShop()->getCategory('Fixture')->getId() > 0, 'ChestShop category not saved');
+            $player->getInventory()->setItemInHand($item);
+            $server->dispatchCommand($player, 'cs additem Fixture 20');
+            $player->getInventory()->setItemInHand(VanillaItems::AIR());
+            $server->dispatchCommand($player, 'cs');
+            $this->later(function() use ($player, $api, $item) : void{
+                $this->clickChest($player, 27);
+                $this->later(function() use ($player, $api, $item) : void{
+                    $this->clickChest($player, 54);
+                    self::require($this->chestWindows >= 2 && $this->chestBlockActor, 'ChestShop did not emit both container openings and a chest block actor');
+                    $this->verifyChestPurchase($player, $api, $item);
+                    $player->sendMessage('chestshop-fixture-purchase-passed');
+                }, 20);
+            });
+        });
+    }
+
+    private function verifyChestPurchase(Player $player, EconomyAPI $api, \pocketmine\item\Item $item) : void{
+        self::require((float) $api->myMoney($player) === 80.0 && $player->getInventory()->contains($item),
+            'ChestShop purchase did not debit wallet and deliver diamonds');
         $this->getLogger()->info('ChestShop transaction passed: wallet 100 -> 80, 3 diamonds delivered');
+    }
+
+    private function clickChest(Player $player, int $size) : void{
+        $inventory = $player->getCurrentWindow();
+        self::require($inventory !== null && $inventory->getSize() === $size, "ChestShop $size-slot menu not open");
+        $item = $inventory->getItem(0);
+        self::require(!$item->isNull(), 'ChestShop menu slot missing');
+        $event = new InventoryTransactionEvent(new InventoryTransaction($player, [
+            new SlotChangeAction($inventory, 0, $item, VanillaItems::AIR())
+        ]));
+        $event->call();
+        self::require($event->isCancelled(), 'ChestShop did not protect display stock');
+    }
+
+    public function onSendChestPacket(DataPacketSendEvent $event) : void{
+        if(!$this->testingChest){
+            return;
+        }
+        foreach($event->getPackets() as $packet){
+            if($packet instanceof BlockActorDataPacket && $packet->nbt->getRoot()->getString('id', '') === 'Chest'){
+                $this->chestBlockActor = true;
+            }
+            if($packet instanceof ContainerOpenPacket){
+                self::require($packet->windowId !== 0, 'ChestShop sent an unresolved window ID');
+                ++$this->chestWindows;
+            }
+        }
     }
 
     private function bank(Player $player, EconomyAPI $api, BankGUI $bank) : void{
@@ -162,8 +228,8 @@ final class Probe extends PluginBase implements Listener{
         $player->onFalconFormResponse($id, $response, false);
     }
 
-    private function later(\Closure $callback) : void{
-        $this->getScheduler()->scheduleDelayedTask(new ClosureTask($callback), 10);
+    private function later(\Closure $callback, int $delay = 10) : void{
+        $this->getScheduler()->scheduleDelayedTask(new ClosureTask($callback), $delay);
     }
 
     private static function require(bool $condition, string $problem) : void{

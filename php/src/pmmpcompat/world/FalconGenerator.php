@@ -8,7 +8,7 @@ use pocketmine\world\ChunkManager;
 use pocketmine\world\generator\Generator;
 
 /** Falcon's own generators: Falcon generates the chunks, this class only names them */
-final class FalconGenerator extends Generator{
+class FalconGenerator extends Generator{
     public function generateChunk(ChunkManager $world, int $chunkX, int $chunkZ) : void{
         //NOOP
     }

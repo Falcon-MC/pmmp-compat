@@ -14,7 +14,21 @@ class Hopper extends Transparent{
         return self::FACINGS[(int) ($this->getStates()["facing_direction"] ?? 0)] ?? Facing::DOWN;
     }
 
+    public function setFacing(int $facing) : self{
+        $state = array_search($facing, self::FACINGS, true);
+        if($state === false){
+            throw new \InvalidArgumentException("Invalid hopper facing $facing");
+        }
+        $this->setState("facing_direction", $state);
+        return $this;
+    }
+
     public function isPowered() : bool{
         return (bool) ($this->getStates()["toggle_bit"] ?? false);
+    }
+
+    public function setPowered(bool $powered) : self{
+        $this->setState("toggle_bit", $powered);
+        return $this;
     }
 }

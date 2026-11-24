@@ -1355,6 +1355,13 @@ abstract class Entity{
 			if($handle === 0){
 				return false;
 			}
+			$event = new EntityMotionEvent($this, $motion);
+			$event->call();
+			if($event->isCancelled() || ($handle = $this->getEntityHandle()) === 0){
+				return false;
+			}
+			$motion = $event->getVector();
+			Utils::checkVector3NotInfOrNaN($motion);
 			falcon_entity_set_motion($handle, $motion->x, $motion->y, $motion->z);
 			return true;
 		}
@@ -1396,16 +1403,6 @@ abstract class Entity{
 	 */
 	public function teleport(Vector3 $pos, ?float $yaw = null, ?float $pitch = null) : bool{
 		Utils::checkVector3NotInfOrNaN($pos);
-		if(!$this->drawn){
-			// Falcon keeps the facing of its own entities
-			$handle = $this->getEntityHandle();
-			if($handle === 0){
-				return false;
-			}
-			$world = $pos instanceof Position && $pos->isValid() ? $pos->getWorld() : $this->getWorld();
-			falcon_entity_teleport($handle, $world->getHandle(), $pos->x, $pos->y, $pos->z);
-			return true;
-		}
 		if($pos instanceof Location){
 			$yaw = $yaw ?? $pos->yaw;
 			$pitch = $pitch ?? $pos->pitch;
@@ -1415,6 +1412,23 @@ abstract class Entity{
 		}
 		if($pitch !== null){
 			Utils::checkFloatNotInfOrNaN("pitch", $pitch);
+		}
+		if(!$this->drawn){
+			$handle = $this->getEntityHandle();
+			if($handle === 0){
+				return false;
+			}
+			$from = $this->getLocation();
+			$world = $pos instanceof Position && $pos->isValid() ? $pos->getWorld() : $from->getWorld();
+			if(function_exists('falcon_entity_teleport_with_rotation')){
+				$result = falcon_entity_teleport_with_rotation($handle, $world->getHandle(), $pos->x, $pos->y, $pos->z,
+					$yaw ?? $from->yaw, $pitch ?? $from->pitch);
+				if($result !== null){
+					return $result;
+				}
+			}
+			falcon_entity_teleport($handle, $world->getHandle(), $pos->x, $pos->y, $pos->z);
+			return true;
 		}
 
 		$from = $this->location->asPosition();

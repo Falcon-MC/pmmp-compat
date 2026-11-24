@@ -24,6 +24,10 @@ final class FalconChunk extends Chunk{
         // Falcon keeps the sub-chunks: PocketMine-MP's are not made
     }
 
+    public function isViewOf(World $world, int $chunkX, int $chunkZ) : bool{
+        return $world === $this->world && $chunkX === $this->chunkX && $chunkZ === $this->chunkZ;
+    }
+
     public function getHeight() : int{
         return Chunk::MAX_SUBCHUNKS;
     }

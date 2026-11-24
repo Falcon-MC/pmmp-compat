@@ -215,6 +215,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_flag_void, 0, 2, IS_VOID,
     ZEND_ARG_TYPE_INFO(0, flag, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_nullable_bool, 0, 1, _IS_BOOL, 1)
+    ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_handle_two_texts_void, 0, 3, IS_VOID, 0)
     ZEND_ARG_TYPE_INFO(0, handle, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, first, IS_STRING, 0)
@@ -326,6 +330,50 @@ PHP_FUNCTION(falcon_player_set_game_mode) {
         Z_PARAM_LONG(gameMode)
     ZEND_PARSE_PARAMETERS_END();
     falcon->playerSetGameMode(HANDLE(FalconPlayer, player), (FalconGameMode) gameMode);
+}
+
+PHP_FUNCTION(falcon_player_allow_flight) {
+    HANDLE_ARGUMENT(player);
+#ifdef FALCON_API_PLAYER_FLIGHT
+    if (FALCON_HAS(playerAllowFlight))
+        RETURN_BOOL(falcon->playerAllowFlight(HANDLE(FalconPlayer, player)) != 0);
+#endif
+    RETURN_NULL();
+}
+
+PHP_FUNCTION(falcon_player_set_allow_flight) {
+    zend_long player;
+    bool allowed;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(player)
+        Z_PARAM_BOOL(allowed)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_PLAYER_FLIGHT
+    if (FALCON_HAS(playerSetAllowFlight))
+        falcon->playerSetAllowFlight(HANDLE(FalconPlayer, player), allowed);
+#endif
+}
+
+PHP_FUNCTION(falcon_player_is_flying) {
+    HANDLE_ARGUMENT(player);
+#ifdef FALCON_API_PLAYER_FLIGHT
+    if (FALCON_HAS(playerIsFlying))
+        RETURN_BOOL(falcon->playerIsFlying(HANDLE(FalconPlayer, player)) != 0);
+#endif
+    RETURN_NULL();
+}
+
+PHP_FUNCTION(falcon_player_set_flying) {
+    zend_long player;
+    bool flying;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(player)
+        Z_PARAM_BOOL(flying)
+    ZEND_PARSE_PARAMETERS_END();
+#ifdef FALCON_API_PLAYER_FLIGHT
+    if (FALCON_HAS(playerSetFlying))
+        falcon->playerSetFlying(HANDLE(FalconPlayer, player), flying);
+#endif
 }
 
 PHP_FUNCTION(falcon_player_name) {
@@ -548,11 +596,76 @@ PHP_FUNCTION(falcon_command_set_aliases) {
     RETURN_BOOL(set != 0);
 }
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_player_visibility_flag, 0, 3, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, target, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, viewer, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, value, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_player_viewer_void, 0, 2, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, target, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, viewer, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_player_viewer_bool, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, target, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, viewer, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+PHP_FUNCTION(falcon_player_set_visible_to) {
+    zend_long target, viewer;
+    bool visible;
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_LONG(target)
+        Z_PARAM_LONG(viewer)
+        Z_PARAM_BOOL(visible)
+    ZEND_PARSE_PARAMETERS_END();
+    if (FALCON_HAS(playerSetVisibleTo))
+        falcon->playerSetVisibleTo(HANDLE(FalconPlayer, target), HANDLE(FalconPlayer, viewer), visible);
+}
+
+PHP_FUNCTION(falcon_player_spawn_to) {
+    zend_long target, viewer;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(target)
+        Z_PARAM_LONG(viewer)
+    ZEND_PARSE_PARAMETERS_END();
+    if (FALCON_HAS(playerSpawnTo))
+        falcon->playerSpawnTo(HANDLE(FalconPlayer, target), HANDLE(FalconPlayer, viewer));
+}
+
+PHP_FUNCTION(falcon_player_despawn_from) {
+    zend_long target, viewer;
+    bool send_packet;
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_LONG(target)
+        Z_PARAM_LONG(viewer)
+        Z_PARAM_BOOL(send_packet)
+    ZEND_PARSE_PARAMETERS_END();
+    if (FALCON_HAS(playerDespawnFrom))
+        falcon->playerDespawnFrom(HANDLE(FalconPlayer, target), HANDLE(FalconPlayer, viewer), send_packet);
+}
+
+PHP_FUNCTION(falcon_player_is_spawned_to) {
+    zend_long target, viewer;
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(target)
+        Z_PARAM_LONG(viewer)
+    ZEND_PARSE_PARAMETERS_END();
+    // Older hosts use the position-based viewer list.
+    RETURN_BOOL(!FALCON_HAS(playerIsSpawnedTo)
+                || falcon->playerIsSpawnedTo(HANDLE(FalconPlayer, target), HANDLE(FalconPlayer, viewer)));
+}
+
 static const zend_function_entry falcon_functions[] = {
     PHP_FE(falcon_log, arginfo_falcon_log)
     PHP_FE(falcon_plugin_folder, arginfo_falcon_plugin_folder)
     PHP_FE(falcon_guard, arginfo_falcon_guard)
     PHP_FE(falcon_warning, arginfo_falcon_warning)
+    PHP_FE(falcon_player_set_visible_to, arginfo_player_visibility_flag)
+    PHP_FE(falcon_player_spawn_to, arginfo_player_viewer_void)
+    PHP_FE(falcon_player_despawn_from, arginfo_player_visibility_flag)
+    PHP_FE(falcon_player_is_spawned_to, arginfo_player_viewer_bool)
     ZEND_RAW_FENTRY("falcon_event_player", ZEND_FN(falcon_event_player), arginfo_handle_long, 0)
     ZEND_RAW_FENTRY("falcon_event_message", ZEND_FN(falcon_event_message), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_event_set_message", ZEND_FN(falcon_event_set_message), arginfo_handle_text_void, 0)
@@ -565,6 +678,10 @@ static const zend_function_entry falcon_functions[] = {
     ZEND_RAW_FENTRY("falcon_event_game_mode", ZEND_FN(falcon_event_game_mode), arginfo_handle_long, 0)
     ZEND_RAW_FENTRY("falcon_player_game_mode", ZEND_FN(falcon_player_game_mode), arginfo_handle_long, 0)
     ZEND_RAW_FENTRY("falcon_player_set_game_mode", ZEND_FN(falcon_player_set_game_mode), arginfo_handle_long_void, 0)
+    ZEND_RAW_FENTRY("falcon_player_allow_flight", ZEND_FN(falcon_player_allow_flight), arginfo_handle_nullable_bool, 0)
+    ZEND_RAW_FENTRY("falcon_player_set_allow_flight", ZEND_FN(falcon_player_set_allow_flight), arginfo_handle_flag_void, 0)
+    ZEND_RAW_FENTRY("falcon_player_is_flying", ZEND_FN(falcon_player_is_flying), arginfo_handle_nullable_bool, 0)
+    ZEND_RAW_FENTRY("falcon_player_set_flying", ZEND_FN(falcon_player_set_flying), arginfo_handle_flag_void, 0)
     ZEND_RAW_FENTRY("falcon_listen", ZEND_FN(falcon_listen), arginfo_falcon_listen, 0)
     ZEND_RAW_FENTRY("falcon_player_name", ZEND_FN(falcon_player_name), arginfo_handle_string, 0)
     ZEND_RAW_FENTRY("falcon_player_xuid", ZEND_FN(falcon_player_xuid), arginfo_handle_string, 0)
@@ -601,6 +718,8 @@ static PHP_MINIT_FUNCTION(falcon) {
     if (zend_register_functions(NULL, falcon_server_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
         return FAILURE;
     if (zend_register_functions(NULL, falcon_entity_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
+        return FAILURE;
+    if (zend_register_functions(NULL, falcon_service_functions, NULL, MODULE_PERSISTENT) != SUCCESS)
         return FAILURE;
     return encoding_module_entry.module_startup_func(type, module_number);
 }
@@ -752,6 +871,7 @@ size_t pmmp_php_memory(int peak) {
 void pmmp_php_stop(void) {
     pmmp_watchdog_stop();
     php_running = false;
+    pmmp_php_clear_services();
     php_embed_shutdown();
     log_sink = NULL;
     free(plugin_folder);
