@@ -23,6 +23,7 @@ final class Runtime{
 
     private static ?PluginManager $plugins = null;
     private static ?ServerLogger $logger = null;
+    private static int $pluginLoadErrors = 0;
     /** @var array<int, true>|null The overworld handles awaiting their startup load event. */
     private static ?array $startupWorlds = null;
 
@@ -84,6 +85,7 @@ final class Runtime{
 
         $errors = 0;
         $manager->loadPlugins($pluginsPath, $errors);
+        self::$pluginLoadErrors = $errors;
         // Falcon has opened these worlds and will announce them before processing connections.
         self::$startupWorlds = [];
         foreach(falcon_worlds() as $levels){
@@ -93,9 +95,6 @@ final class Runtime{
         }
         Bridge::listen();
         $manager->enablePlugins(PluginEnableOrder::STARTUP);
-        $count = count($manager->getPlugins());
-        Log::info($count . ' PocketMine-MP plugin' . ($count === 1 ? '' : 's') . ' loaded'
-            . ($errors > 0 ? ', ' . $errors . ' could not be' : ''));
     }
 
     /** @internal Complete the second enable phase after the last startup world load. */
@@ -114,8 +113,15 @@ final class Runtime{
             return;
         }
         self::$startupWorlds = null;
-        self::$plugins?->enablePlugins(PluginEnableOrder::POSTWORLD);
+        $manager = self::$plugins;
+        if($manager === null){
+            return;
+        }
+        $manager->enablePlugins(PluginEnableOrder::POSTWORLD);
         Server::getInstance()->getResourcePackManager()->publish();
+        $count = count($manager->getPlugins());
+        Log::info($count . ' PocketMine-MP plugin' . ($count === 1 ? '' : 's') . ' loaded'
+            . (self::$pluginLoadErrors > 0 ? ', ' . self::$pluginLoadErrors . ' could not be' : ''));
     }
 
     // the constants PocketMine-MP defines at startup; the server's data folder is Falcon's
@@ -154,6 +160,7 @@ final class Runtime{
         }
         self::$plugins = null;
         self::$startupWorlds = null;
+        self::$pluginLoadErrors = 0;
     }
 
     public static function plugins() : ?PluginManager{
